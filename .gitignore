@@ -1,0 +1,17 @@
+# 大体积环境（可按 RECON_PHASE0.md §8.5 重建，不进 git）
+tools/
+sysroot/
+backup/
+slib
+
+# 打包产物与日志
+*.tar.gz
+*.tar.xz
+*.zip
+*.log
+
+# 编译产物
+tests/hello
+tests/hello_cpp
+*.o
+*.elf
