@@ -3,6 +3,7 @@ tools/
 sysroot/
 backup/
 slib
+work/
 
 # 打包产物与日志
 *.tar.gz
