@@ -61,44 +61,63 @@ sudo apt-get install -y --allow-downgrades \
 
 ---
 
-## 四、Chromium GPU 加速修复实录（2026-08-31 终版根因：GPU watchdog 误杀）
+## 四、Chromium 渲染配置终版（2026-08-31 下午三轮实验定版）
 
-**终版结论：GPU 进程初始化（ANGLE 重试 + Mesa freedreno 在 A53 上 >30s）超过 Chromium GPU watchdog 阈值，watchdog 误判挂死并爆破进程（固定 PC 静默 abort，exit_code=512）。加 `--disable-gpu-watchdog` 后 GPU 进程稳定，硬件合成生效。**
+**终版结论（三层）：**
+1. **GPU watchdog 误杀**（上午修复，仍有效）：`--disable-gpu-watchdog` 必需，否则 GPU 进程初始化 >30s 被 watchdog 爆破（exit_code=512）。
+2. **硬件合成黑屏**（下午实证）：去掉 `--disable-gpu-compositing` 后 GPU 进程稳定、无新 dump，但**物理屏全黑**（X 帧缓冲截图仅剩 openbox 空桌面 8.5KB，鼠标指针正常）——Chromium 内容走 DRM overlay plane 后**提交不到物理面板**。上一次"全黑有鼠标"事件的根因就是这个，与 Mesa 混装无关。**`--disable-gpu-compositing` 必须保留（软件合成）**。
+3. **ANGLE 硬件加速实际未生效**（2026-08-31 下午新发现，待专项）：t4 实验实例 stderr 实录 `ANGLE Display::initialize error 12289: Could not create a backing OpenGL context` → `EGL_NOT_INITIALIZED, trying next display type`——`--enable-gpu --use-angle=gles` 的 EGL 路径初始化失败，Chromium 回退软渲染。**canvas 图表慢（Grafana 面板初始化 2-4 分钟）的直接原因**。此前"硬件路径确认"的判定（SwiftShader 0 次 + MESA BO 警告）不成立：BO 警告只能证明 freedreno 库被加载，不能证明 context 创建成功。这是"驱动没发挥"审计的最大问题。
 
-### 证据链（32+ 份 minidump + xlog + 对照实验）
+### 证据链（watchdog 修复，上午）
 
 - 35 份 crashpad 转储 PC 完全一致（chromium+0xff65d48，libc abort 调用链）→ 确定性主动爆破，非野指针
 - 崩溃周期精确 30s；dmesg 全程无 adreno fault/hang → 不是 GPU 挂死，是 watchdog 判死
 - `--no-sandbox` 对照实验：照崩 → 排除沙箱
-- verbose 日志 SwiftShader 出现 0 次 + MESA BO 警告（freedreno 在跑）→ 硬件路径确认
 - TU (Turnip) 报错仅为 GPU info 收集探测失败（VK_ERROR_INITIALIZATION_FAILED，良性 handled）
 - `MESA: warning: DRM_MSM_GEM_INFO -22` 在 24.0.5 下确认为非致命警告，与崩溃无关
+
+### 证据链（硬件合成黑屏，下午）
+
+- 实验步骤：sed 去掉 `--disable-gpu-compositing`（备份 .bak-hwcomp-20260831）→ pkill 重启 → GPU 进程稳定、pending 目录无新 dump（最新 dump 为 12:45 旧文件）
+- scrot 截图 8.5KB（纯 openbox 桌面），用户目视确认**物理屏全黑**、触摸有鼠标 → overlay 内容到不了面板
+- 回退后（恢复 --disable-gpu-compositing）物理屏立即恢复显示
+- 结论：**此组合不可用，勿再尝试**；除非未来修复 Xorg msm overlay 提交（内核/驱动层）
+
+### 证据链（ANGLE EGL 失败，下午）
+
+- `--enable-logging=stderr` 抓取：`Could not create a backing OpenGL context`（angle_platform_impl.cc）+ `eglInitialize: EGL_NOT_INITIALIZED ... trying next display type`
+- **ldd 实证**：libEGL_mesa.so.0 / libgbm.so.1 / msm_dri.so 均 **NEEDED 无 libgallium**（静态链接），与 mesa-libgallium 删除无关（该包已删，libgallium 文件归零，glxinfo/eglinfo 全绿：FD506 / GL 3.1 / EGL 1.5 / direct rendering: Yes）
+- Grafana 前端 JS 存活且查询 11s 即成功返回（容器日志 queryData status=ok），但面板 canvas 需 2-4 分钟才逐步画完（软栅格化速度）——**"卡 Loading/空图表"是初始化慢，不是故障**，判断前等 ≥3 分钟再截图
 
 ### 排除项（勿再怀疑）
 
 1. **沙箱**：`--no-sandbox` 实证无效（已回退，沙箱保持开启）
-2. **Mesa 26.1.7 混装**：`msm_dri.so`（24.0.5 noble 构建）为静态链接，NEEDED 无 libgallium → 26.1.7 残留（mesa-libgallium/mesa-common-dev/mesa-vdpau-drivers）**不在 GL 运行时路径**，仅待清理防患
-3. **SwiftShader/软渲染地雷**：环境变量已清，verbose 日志 0 次出现
-4. **Turnip**：探测失败即被 Chromium 妥善处理，非死因
+2. **Mesa 26.1.7 混装**：已于 2026-08-31 13:27 清理完毕（移除 mesa-libgallium / mesa-common-dev / mesa-vdpau-drivers 及 va-driver-all / vdpau-driver-all 空元包），GL 运行时验证完好。三个库 ldd 均无 libgallium 依赖
+3. **Grafana 数据链路**：Chromium→Grafana API→Prometheus(:9090 绑 *)→netdata(127.0.0.1:19999，宿主机进程) 全链路 curl 实证通畅；targets 全 UP
+4. **profile 缓存**：全新 user-data-dir 实例同样现象，排除
+5. **内存/zram**：available 1.1GB、si/so≈0、无 OOM，排除
 
-### 已应用的最终修复（.xinitrc，设备侧 .bak 备份齐全，快照存 device_conf/）
+### 联网请求处理（2026-08-31 定版）
+
+- `/etc/chromium.d/extensions` 已移除 `--enable-remote-extensions`（⚠️ 改此目录时**勿把 .bak 留在同目录**——wrapper `for file in /etc/chromium.d/*` 会通配 source，备份文件里的 flag 会复活；备份已移至 ~/extensions.bak-20260831）
+- `.xinitrc` 已加 `--disable-background-networking`
+- 残余 SYN-SENT（crashpad 上传 pending dump 等）为异步行为，**不阻塞页面加载**（实证：有 SYN-SENT 时页面照常渲染完成）
+
+### 已应用的最终配置（.xinitrc，快照存 device_conf/）
 
 ```bash
 exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
-  --disable-gpu-watchdog --force-device-scale-factor=1.5 \
+  --disable-gpu-watchdog --disable-gpu-compositing --disable-background-networking \
+  --force-device-scale-factor=1.5 \
   --user-data-dir=/home/umeko/.kiosk --enable-gpu --use-angle=gles \
   http://127.0.0.1:3000/d/netdata-system-zh?kiosk
 ```
 
-- 新增 `--disable-gpu-watchdog`（核心修复）
-- 删除 `--disable-frame-rate-limit`（软渲染时代参数；HW 合成下不限帧会烧 200% CPU，去掉后 vsync 限 60fps，load 3.05→1.07）
-
 ### 已知代价与运维注意
 
 - watchdog 禁用后，GPU 进程**真挂死不会自愈**（画面冻结但进程在）→ 处置：`pkill -f '/usr/lib/chromium/chromium'`，getty autologin 循环会自动拉起整个 X + kiosk（这就是设备的"看门狗"）
-- 若未来换更快启动路径（如 Mesa 初始化提速），可尝试撤掉此参数复测
-
-**历史回退方案（已不需要）**：`--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization`
+- **Chromium 重启后 Grafana 面板需 2-4 分钟才渲染完成**（软栅格化），属正常现象，勿误判为故障反复重启
+- 待专项：ANGLE EGL 初始化失败修复（恢复 Chromium 硬件加速），预期收益：Grafana 渲染提速、CPU 占用下降
 
 ---
 
@@ -107,14 +126,16 @@ exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
 | 需求 | 推荐路线 | 说明 |
 |---|---|---|
 | 3D / GLES 原生加速 | **原生 EGL/GLES**（SDL2 + GLES2、Qt、或 WebKitGTK 硬件加速路径） | 这条链路已验证可用（glmark2 200+ FPS） |
-| 跑 Chromium / Web 界面 | **GPU 硬件合成**（`--enable-gpu --use-angle=gles --disable-gpu-watchdog`） | 2026-08-31 起可用；`transform: scale()` 黑屏风险待复测，缩放仍建议 `zoom` |
+| 跑 Chromium / Web 界面 | 软件渲染 + GPU 光栅化尝试（现状）→ **待专项修复 ANGLE EGL** | 硬件合成黑屏已证伪勿试；ANGLE EGL 失败是当前最大优化点 |
 | Vulkan | **放弃** | Adreno 506 无 Turnip 支持 |
 | 2D 界面 | XRender / EXA 硬件加速可用 | Xorg + openbox 环境正常 |
 
 ### 综合开发检查清单
 
-- [ ] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（残留 26.1.7 gallium 已证实不在 GL 运行时路径，待清理防患）
-- [x] Chromium GPU 加速已修复（2026-08-31）：`.xinitrc` 参数 `--enable-gpu --use-angle=gles --disable-gpu-watchdog`；GPU 进程稳定，无 use-gl=disabled，SwiftShader 0 次；已删 `--disable-frame-rate-limit`（HW 下不限帧烧 200% CPU）；GPU 进程若真挂死，`pkill -f '/usr/lib/chromium/chromium'` 后 getty autologin 会自动拉起
+- [x] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（26.1.7 残留已清理完毕 2026-08-31，ldd 证实三库无 libgallium 依赖）
+- [x] Chromium 稳定配置已定版（2026-08-31）：`--disable-gpu-watchdog --disable-gpu-compositing --disable-background-networking`（watchdog 防误杀；硬件合成黑屏实证勿再试；联网组件已断）
+- [ ] **待专项：ANGLE EGL 初始化失败**（`Could not create a backing OpenGL context`）——Chromium 硬件加速实际未生效，当前为软栅格化；修复后 Grafana/Web 渲染可望大幅提速
+- [ ] 硬件合成黑屏（DRM overlay 提交不到面板）——需要内核/Xorg 驱动层修复，长期项
 - [ ] zram 已生效：`/etc/default/zramswap`（lz4, PERCENT=50 ≈ 1.4G），重启实测 swapon 正常
 - [ ] 会话/配置文件中禁止出现 `LIBGL_ALWAYS_SOFTWARE` / `GALLIUM_DRIVER=llvmpipe`（已清理，勿再加）
 - [ ] Web 缩放用 `zoom`，不用 `transform: scale()`（软渲染下合成层会黑屏；GPU 合成开启后此限制待复测）

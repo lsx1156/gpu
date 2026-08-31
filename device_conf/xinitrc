@@ -19,4 +19,4 @@ until curl -sf -o /dev/null http://127.0.0.1:3000/api/health; do sleep 2; done
 echo "T_grafana_ready $(($(date +%s)-T0))s"
 echo "Grafana 就绪，启动浏览器"
 echo "T_chromium_exec $(($(date +%s)-T0))s"
-exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate --disable-gpu-watchdog --force-device-scale-factor=1.5 --user-data-dir=/home/umeko/.kiosk --enable-gpu --use-angle=gles http://127.0.0.1:3000/d/netdata-system-zh?kiosk
+exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate --disable-gpu-watchdog --disable-gpu-compositing --disable-background-networking --force-device-scale-factor=1.5 --user-data-dir=/home/umeko/.kiosk --enable-gpu --use-angle=gles http://127.0.0.1:3000/d/netdata-system-zh?kiosk
