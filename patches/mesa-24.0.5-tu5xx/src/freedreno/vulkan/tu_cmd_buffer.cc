@@ -1138,10 +1138,214 @@ tu6_init_hw(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
    struct tu_device *dev = cmd->device;
    const struct tu_physical_device *phys_dev = dev->physical_device;
 
-   /* tu5xx: a5xx 硬件初始化为最小实现（仅 WFI），跳过全部 a6xx 寄存器。
-    * a5xx 专属初始化将对照 fd5 gallium 逐步补齐。 */
+   /* tu5xx: a5xx 硬件初始化，移植自 fd5 gallium 的 fd5_emit_restore()
+    * (a5xx/fd5_emit.c)。A506 走 !540 分支；GMEM/binning 相关留待
+    * renderpass 里程碑补齐。 */
    if (CHIP == A5XX) {
+      /* render mode: BYPASS（fd5_set_render_mode(BYPASS)，去掉 marker） */
+      tu_cs_emit_pkt7(cs, CP_SET_RENDER_MODE, 5);
+      tu_cs_emit(cs, CP_SET_RENDER_MODE_0_MODE(BYPASS));
+      tu_cs_emit(cs, 0); /* ADDR_LO */
+      tu_cs_emit(cs, 0); /* ADDR_HI */
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      /* fd5_cache_flush(): UCHE 全量 invalidate + WFI */
+      tu_cs_emit_pkt4(cs, REG_A5XX_UCHE_CACHE_INVALIDATE_MIN_LO, 5);
+      tu_cs_emit(cs, 0x00000000);
+      tu_cs_emit(cs, 0x00000000);
+      tu_cs_emit(cs, 0x00000000);
+      tu_cs_emit(cs, 0x00000000);
+      tu_cs_emit(cs, 0x00000012);
       tu_cs_emit_wfi(cs);
+
+      /* --- fd5_emit_restore() 寄存器包 --- */
+      tu_cs_emit_pkt4(cs, REG_A5XX_HLSQ_UPDATE_CNTL, 1);
+      tu_cs_emit(cs, 0xfffff);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_RESTART_INDEX, 1);
+      tu_cs_emit(cs, 0xffffffff);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_RASTER_CNTL, 1);
+      tu_cs_emit(cs, 0x00000012);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_POINT_MINMAX, 2);
+      tu_cs_emit(cs, A5XX_GRAS_SU_POINT_MINMAX_MIN(1.0f) |
+                     A5XX_GRAS_SU_POINT_MINMAX_MAX(4092.0f));
+      tu_cs_emit(cs, A5XX_GRAS_SU_POINT_SIZE(0.5f));
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_CONSERVATIVE_RAS_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_SCREEN_SCISSOR_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_VS_CONFIG_MAX_CONST, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_FS_CONFIG_MAX_CONST, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E292, 2);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x00000044);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_DBG_ECO_CNTL, 1);
+      tu_cs_emit(cs, 0x00100000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VFD_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x0000001f);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x0000001e);
+
+      /* A506 非 540 分支 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_DBG_ECO_CNTL, 1);
+      tu_cs_emit(cs, 0x40000800);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x00000544);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_HLSQ_TIMEOUT_THRESHOLD_0, 2);
+      tu_cs_emit(cs, 0x00000080);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_DBG_ECO_CNTL, 1);
+      tu_cs_emit(cs, 0x00000400);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_HLSQ_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x00000001);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_MODE_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      /* 禁用全部 draw-state 组 */
+      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
+                     CP_SET_DRAW_STATE__0_DISABLE_ALL_GROUPS |
+                     CP_SET_DRAW_STATE__0_GROUP_ID(0));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_CONSERVATIVE_RAS_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_BIN_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_FS_PRIMITIVEID_CNTL, 1);
+      tu_cs_emit(cs, 0x000000ff);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_OVERRIDE, 1);
+      tu_cs_emit(cs, A5XX_VPC_SO_OVERRIDE_SO_DISABLE);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_BASE_LO(0), 3);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_FLUSH_BASE_LO(0), 2);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_GS_PARAM, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_HS_PARAM, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_TP_FS_ROTATION_CNTL, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E004, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_LAYERED, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUF_CNTL, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_OFFSET(0), 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_GS_LAYERED, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E5AB, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E5C2, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_BASE_LO(1), 3);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_OFFSET(1), 6);
+      for (int i = 0; i < 6; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_OFFSET(2), 6);
+      for (int i = 0; i < 6; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_BUFFER_OFFSET(3), 3);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E5DB, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_HS_CTRL_REG0, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_GS_CTRL_REG0, 1);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_VS_TEX_COUNT, 4);
+      for (int i = 0; i < 4; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_FS_TEX_COUNT, 2);
+      tu_cs_emit(cs, 0);
+      tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7C0, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7C5, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7CA, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7CF, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7D4, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E7D9, 3);
+      for (int i = 0; i < 3; i++)
+         tu_cs_emit(cs, 0);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_CLEAR_CNTL, 1);
+      tu_cs_emit(cs, 0x00000000);
+
       cmd->state.cache.pending_flush_bits &=
          ~(TU_CMD_FLAG_WAIT_FOR_IDLE | TU_CMD_FLAG_CACHE_INVALIDATE);
       return;

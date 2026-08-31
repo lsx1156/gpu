@@ -242,6 +242,14 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - dmesg 复核：仅 MDP5 显示控制器历史报错（时间戳早于测试，X 会话既有问题），**MSM GPU 提交无任何新错误**。
 - vkenum.c 用 `git add -f` 强制入库（`work/` 忽略规则的例外），探针工具随版本走。
 
+### M1.2 产出三：tu6_init_hw<A5XX> 真实寄存器包上 GPU 执行成功（2026-08-31）
+
+- **移植来源**：fd5 gallium `a5xx/fd5_emit.c` 的 `fd5_emit_restore()`（寄存器恢复序列）+ `fd5_emit.h` 的 `fd5_set_render_mode(BYPASS)` / `fd5_cache_flush()`。A506 走非 540 分支（`SP_DBG_ECO_CNTL=0x40000800`）。
+- **内容**（每次 BeginCommandBuffer 产生）：CP_SET_RENDER_MODE(BYPASS) → UCHE 全量 invalidate(5 reg) + WFI → 约 50 组 PKT4 寄存器写（HLSQ/PC/GRAS/SP/RB/TPL1/VPC/VFD 模式与 ECO 控制寄存器、CP_SET_DRAW_STATE 禁用全部组、VPC SO 全零序列、RB_CLEAR_CNTL 等）。
+- **a5xx 头引入方式（关键坑）**：`tu_common.h` 直接 include `a5xx.xml.h`（c-defines）会与 `a6xx.xml.h` 的 unscoped enum 冲突（`PERF_LRZ_*`/`PERF_CMPDECMP_*` 等枚举成员同名，C++ 作用域冲突）。解法：**`namespace a5xx_xml { #include "a5xx.xml.h" } using namespace a5xx_xml;`**——REG_A5XX_* 是宏不受 namespace 影响；static inline 打包函数经 using 引入；同名枚举成员按名字隐藏规则由全局（a6xx）胜出，无二义。另需先 include `util/half_float.h`（a5xx half-float 字段打包函数用 `_mesa_float_to_half`；gallium 的 `util/u_half.h` 不在 turnip include path）。
+- **验证**：构建通过 → 设备实测非空 CB（含完整 a5xx init 寄存器包）提交 → **fence OK、无 hang、无 fault，dmesg 无新 GPU 错误**——这是 A506 上第一条由自研 tu5xx 驱动构造并被 GPU 真实执行的非平凡命令流。
+- **下一步**：renderpass/GMEM 路径（a5xx 无 CP_COND_REG_EXEC，需按 fd5 的 GRAS_SC_BIN_CNTL + CP_SET_RENDER_MODE(GMEM) 方式重构 tu 渲染流程），然后管线状态 + CP_DRAW 第一个三角形。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）

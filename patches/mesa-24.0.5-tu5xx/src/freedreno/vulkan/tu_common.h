@@ -56,6 +56,14 @@
 
 #include "adreno_common.xml.h"
 #include "adreno_pm4.xml.h"
+/* a5xx 与 a6xx 的 c-defines 头同为 unscoped enum（PERF_* 等成员同名冲突），
+ * 将 a5xx 包进 namespace 隔离：REG_A5XX_* 是宏不受影响；static inline
+ * 打包函数经 using 引入；与 a6xx 全局同名枚举成员按名字隐藏规则由全局胜出。 */
+#include "util/half_float.h"
+namespace a5xx_xml {
+#include "a5xx.xml.h"
+}
+using namespace a5xx_xml;
 #include "a6xx.xml.h"
 #include "fdl/freedreno_layout.h"
 #include "common/freedreno_dev_info.h"
