@@ -27,7 +27,7 @@
 | OpenGL / EGL（原生 GLES） | **Mesa Freedreno 驱动（fdversion FD506）** | **完全可用**，`glmark2` 实测 **200+ FPS** |
 | 2D 加速 | XRender / EXA | 硬件加速支持 |
 | Vulkan | Mesa Turnip 驱动 | **不支持 Adreno 506，别抱希望** |
-| Chromium 渲染 | CPU 软渲染 | 当前稳定方案（稳定优先，禁用 GPU 合成） |
+| Chromium 渲染 | **GPU 硬件合成**（ANGLE-GLES → Mesa freedreno FD506） | 2026-08-31 修复：加 `--disable-gpu-watchdog` 后 GPU 进程稳定 |
 
 **核心结论：原生 EGL/GLES 链路（Freedreno）是这张卡唯一可靠的硬件加速路径。**
 
@@ -61,31 +61,44 @@ sudo apt-get install -y --allow-downgrades \
 
 ---
 
-## 四、Chromium 为何只能软渲染（2026-08-31 根因修正）
+## 四、Chromium GPU 加速修复实录（2026-08-31 终版根因：GPU watchdog 误杀）
 
-**真正的死因（~/.kiosk-x.log 铁证）**：
+**终版结论：GPU 进程初始化（ANGLE 重试 + Mesa freedreno 在 A53 上 >30s）超过 Chromium GPU watchdog 阈值，watchdog 误判挂死并爆破进程（固定 PC 静默 abort，exit_code=512）。加 `--disable-gpu-watchdog` 后 GPU 进程稳定，硬件合成生效。**
 
-```
-ERROR:ui/gl/init/gl_factory.cc:110] Requested GL implementation (gl=none,angle=none)
-  not found in allowed implementations: [(gl=egl-angle,angle=default)].
-ERROR:components/viz/.../viz_main_impl.cc:190] Exiting GPU process due to errors during initialization
-```
+### 证据链（32+ 份 minidump + xlog + 对照实验）
 
-1. **`--use-gl=egl` 是已废除的老参数**：现版本 Chromium 将其解析为 `gl=none,angle=none`，不在允许列表中 → GPU 进程反复启动即崩（即历史上的 exit_code=512），随后 chromium 内部以 `--use-gl=disabled` 降级运行。与 Turnip/内核 -22 无关。
-2. **旧结论修正**：`.profile`/`.xsessionrc` 里堆叠的 `LIBGL_ALWAYS_SOFTWARE=1` / `GALLIUM_DRIVER=llvmpipe` / `QT_XCB_FORCE_SOFTWARE_OPENGL=1` 属"休眠地雷"——kiosk 启动链（login → .bash_profile → startx → .xinitrc）并不读取它们，活会话进程环境实测干净。已全部清理。
-3. GPU 进程存活后若仍有 -22 相关崩溃，再回头清理 Mesa 26.1.7 gallium 混装（候选手段）。
+- 35 份 crashpad 转储 PC 完全一致（chromium+0xff65d48，libc abort 调用链）→ 确定性主动爆破，非野指针
+- 崩溃周期精确 30s；dmesg 全程无 adreno fault/hang → 不是 GPU 挂死，是 watchdog 判死
+- `--no-sandbox` 对照实验：照崩 → 排除沙箱
+- verbose 日志 SwiftShader 出现 0 次 + MESA BO 警告（freedreno 在跑）→ 硬件路径确认
+- TU (Turnip) 报错仅为 GPU info 收集探测失败（VK_ERROR_INITIALIZATION_FAILED，良性 handled）
+- `MESA: warning: DRM_MSM_GEM_INFO -22` 在 24.0.5 下确认为非致命警告，与崩溃无关
 
-**已应用的修复（2026-08-31，待重启验证）**（设备侧均有 .bak-20260831 备份，快照存 device_conf/）：
+### 排除项（勿再怀疑）
 
-- `.xinitrc`：删除 `--use-gl=egl --use-angle=native --enable-gpu-compositing=false --disable-gpu-rasterization`，仅保留 `--enable-gpu`（走默认 egl-angle → Mesa EGL → freedreno FD506）
-- `.profile` / `.xsessionrc`：删除全部软渲染变量（保留 QT 缩放、CLUTTER_BACKEND=glx）
-- 新增 zram：`/etc/default/zramswap`（ALGO=lz4, PERCENT=50 ≈ 1.4G），zramswap.service 开机自启
+1. **沙箱**：`--no-sandbox` 实证无效（已回退，沙箱保持开启）
+2. **Mesa 26.1.7 混装**：`msm_dri.so`（24.0.5 noble 构建）为静态链接，NEEDED 无 libgallium → 26.1.7 残留（mesa-libgallium/mesa-common-dev/mesa-vdpau-drivers）**不在 GL 运行时路径**，仅待清理防患
+3. **SwiftShader/软渲染地雷**：环境变量已清，verbose 日志 0 次出现
+4. **Turnip**：探测失败即被 Chromium 妥善处理，非死因
 
-**若重启后 GPU 进程仍崩溃的回退方案**（旧经验参数）：
+### 已应用的最终修复（.xinitrc，设备侧 .bak 备份齐全，快照存 device_conf/）
 
 ```bash
---disable-gpu --disable-gpu-compositing --disable-gpu-rasterization
+exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
+  --disable-gpu-watchdog --force-device-scale-factor=1.5 \
+  --user-data-dir=/home/umeko/.kiosk --enable-gpu --use-angle=gles \
+  http://127.0.0.1:3000/d/netdata-system-zh?kiosk
 ```
+
+- 新增 `--disable-gpu-watchdog`（核心修复）
+- 删除 `--disable-frame-rate-limit`（软渲染时代参数；HW 合成下不限帧会烧 200% CPU，去掉后 vsync 限 60fps，load 3.05→1.07）
+
+### 已知代价与运维注意
+
+- watchdog 禁用后，GPU 进程**真挂死不会自愈**（画面冻结但进程在）→ 处置：`pkill -f '/usr/lib/chromium/chromium'`，getty autologin 循环会自动拉起整个 X + kiosk（这就是设备的"看门狗"）
+- 若未来换更快启动路径（如 Mesa 初始化提速），可尝试撤掉此参数复测
+
+**历史回退方案（已不需要）**：`--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization`
 
 ---
 
@@ -94,14 +107,15 @@ ERROR:components/viz/.../viz_main_impl.cc:190] Exiting GPU process due to errors
 | 需求 | 推荐路线 | 说明 |
 |---|---|---|
 | 3D / GLES 原生加速 | **原生 EGL/GLES**（SDL2 + GLES2、Qt、或 WebKitGTK 硬件加速路径） | 这条链路已验证可用（glmark2 200+ FPS） |
-| 跑 Chromium / Web 界面 | **认了软渲染**，带禁用 GPU 参数 | 用 `zoom` 缩放，**别用 `transform: scale()`**（软渲染下合成层会黑屏） |
+| 跑 Chromium / Web 界面 | **GPU 硬件合成**（`--enable-gpu --use-angle=gles --disable-gpu-watchdog`） | 2026-08-31 起可用；`transform: scale()` 黑屏风险待复测，缩放仍建议 `zoom` |
 | Vulkan | **放弃** | Adreno 506 无 Turnip 支持 |
 | 2D 界面 | XRender / EXA 硬件加速可用 | Xorg + openbox 环境正常 |
 
 ### 综合开发检查清单
 
-- [ ] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（残留 26.1.7 gallium 待清理）
-- [ ] Chromium 启动参数已去掉 `--use-gl=egl`（老参数，GPU 进程死因），当前 `--enable-gpu`；重启验证 GPU 进程存活，失败则回退 `--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization`
+- [ ] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（残留 26.1.7 gallium 已证实不在 GL 运行时路径，待清理防患）
+- [x] Chromium GPU 加速已修复（2026-08-31）：`.xinitrc` 参数 `--enable-gpu --use-angle=gles --disable-gpu-watchdog`；GPU 进程稳定，无 use-gl=disabled，SwiftShader 0 次；已删 `--disable-frame-rate-limit`（HW 下不限帧烧 200% CPU）；GPU 进程若真挂死，`pkill -f '/usr/lib/chromium/chromium'` 后 getty autologin 会自动拉起
+- [ ] zram 已生效：`/etc/default/zramswap`（lz4, PERCENT=50 ≈ 1.4G），重启实测 swapon 正常
 - [ ] 会话/配置文件中禁止出现 `LIBGL_ALWAYS_SOFTWARE` / `GALLIUM_DRIVER=llvmpipe`（已清理，勿再加）
 - [ ] Web 缩放用 `zoom`，不用 `transform: scale()`（软渲染下合成层会黑屏；GPU 合成开启后此限制待复测）
 - [ ] 需要 GPU 加速的场景优先考虑原生 EGL/GLES，而非浏览器
@@ -115,7 +129,7 @@ ERROR:components/viz/.../viz_main_impl.cc:190] Exiting GPU process due to errors
 能。原生 EGL/GLES 走 Freedreno 完全可用，glmark2 200+ FPS。
 
 **Q2：为什么 Chromium 黑屏/崩溃？**
-（2026-08-31 修正）真凶是启动参数 `--use-gl=egl`——已废除的老参数，被解析为 `gl=none,angle=none`，GPU 进程启动即崩（exit_code=512）。已修复待验证。
+（2026-08-31 终版）真凶是 **Chromium GPU watchdog**：GPU 进程初始化（Mesa/ANGLE 在 A53 上 >30s）被判挂死遭爆破（exit_code=512，固定 PC 静默 abort）。加 `--disable-gpu-watchdog` 修复，现 GPU 硬件合成稳定运行。早期"废弃参数 `--use-gl=egl`"是其中一层诱因，已一并移除。
 
 **Q3：为什么不用 Mesa 26.x？**
 与内核 6.7.5 不兼容，`DRM_MSM_GEM_INFO` 返回 -22。必须锁 24.0.5。
