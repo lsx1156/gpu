@@ -197,8 +197,13 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **libexpat.so.1.9.1 损坏**：sysroot 内该文件被提取时损坏（readelf `Machine: <unknown>: 0xbfef` + `e_shentsize` 小于 section header 大小）。从设备重拉干净副本（198712B）替换后链接通过。
 - 失败工具（`fd5_layout/fd6_layout/ir3_delay_test/ir3_disasm` 等）仅是 `-Dbuild-tests=false` 未覆盖的旧测试目标，非驱动核心，不影响 `.so` 产出。
 
-### M1.1 待办（未做）
-- 改 turnip 门禁（`tu_device.cc`）允许 a5xx/A506 枚举，让 vkenum 能列出物理设备，再逐层搭建 tu5xx 命令流后端。
+### M1.1 产出一：A506 物理设备枚举打通（2026-08-31）
+- **改动**：`src/freedreno/vulkan/tu_device.cc` 的 `tu_physical_device_init()` 门禁 switch 新增 `case 5` 分支（a5xx），a5xx 尚无 CCU 语义，保守置 `ccu_offset_bypass=ccu_offset_gmem=0`、`usable_sets=0/reserved_set_idx=-1`；其余仍走通用路径。
+- **合法性依据**：`fd_dev_info()` 对 a5xx 的 a6xx/a7xx 子结构为**零初始化**（`fd_dev_info.c` 的 `modified = *orig` + `fd_dev_info_raw` 返回的 entries 未填 a6xx 字段），故特性自动关闭，无垃圾值。
+- **验证**：增量重编 → 交叉编译 `work/vkenum.c`（dlopen 版最小枚举器）→ pscp 部署 `libvulkan_freedreno.so` + 修正 `library_path` 的 ICD json + vkenum 到设备 `~/tu5xx/`，`VK_ICD_FILENAMES=... ./vkenum`：
+  - **`physical device count = 1`，`device[0]: name='Turnip Adreno (TM) 506'`，`vendorID=0x5143 (Qualcomm)`，`deviceID=0x5000600`，`deviceType=INTEGRATED_GPU`，`apiVersion 1.0.274`，`driverVersion 24.0.5`** —— 相比 M1.0 的 “unsupported, 枚举 0 设备”，**已成功枚举出 A506 物理设备**。
+- **遗留**：最小桩 vkenum 在枚举期 loader 对上桩子存在内存越界读写，收尾 `free(devs)/dlclose` 触发 glibc free 崩（gdb 实证 `SIGSEGV @ __GI___libc_free`）；桩已改为枚举完 fflush+`_exit(0)` 干净退出——这是**测试桩**层面的问题，非驱动枚举逻辑。下一步先清理该桩布局，或维护层直接搭建 tu5xx 命令流后端。
+- M1.1 里程碑验收 = **vkenum 能列出 A506 物理设备**，已达标。
 
 ---
 
