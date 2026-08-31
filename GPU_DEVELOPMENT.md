@@ -142,6 +142,31 @@ exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
 
 ---
 
+## 四·补 freedreno 用户态审计与落地（2026-08-31）
+
+**来源**：对照一份"用户态开启 freedreno（不改内核）"通用指南逐项核对本机。**结论：九成已满足，唯一落地项为 CPU 调度器。**
+
+### 逐项核对（只读审计，`work/perf_audit.sh`）
+
+| 指南项 | 本机现状 | 结论 |
+|---|---|---|
+| render node 权限 | `renderD128` 属组 `render`，用户已在 `render`+`video` 组 | ✅ 已满足 |
+| 固件 | `/lib/firmware/a506_zap.*` 已就位（A506 无 GMU，仅 zap） | ✅ 已满足 |
+| 闭源 blob | DRI 目录仅开源 `msm/swrast/kms_swrast`，无 qcom 闭源 GLES/EGL | ✅ 无需处理 |
+| 环境变量 | 无 GALLIUM/SOFTWARE/MESA 覆盖残留 | ✅ 干净 |
+| GPU 调度 | devfreq `simple_ondemand`（无 performance 可选），空闲 200MHz 属正常提频机制 | ✅ 已优 |
+| 热管理 | CPU 40–43°C / GPU 39°C | ✅ 无 throttling |
+| Mesa 版本 | 全套 24.0.5，无 26.1.7 残留 | ✅ 已锁 |
+| **CPU 调度器** | 4 核全 `performance`（可选 schedutil/ondemand/userspace） | ⚠️ **唯一落地项** |
+
+### 落地（2026-08-31）
+
+- **CPU governor `performance` → `schedutil`**（最佳性能/功耗平衡；`performance` 恒满频，对持续 kiosk 的电池终端耗电升温）。
+- 运行态已应用 4 核全 schedutil；持久化走 systemd 服务 `cpu-governor.service`（oneshot，`WantedBy=multi-user.target`，已 enable+active，重启自动生效）。
+- 提醒：改系统库/写 /etc 下的持久化文件，**别在本会话用 plink 传 heredoc**（CRLF 会破坏正文，曾制造 0 字节 masked 服务）；统一改为**本地写文件 → pscp 推送 → 远端直跑小脚本**。
+
+---
+
 ## 五、开发路线建议（避免反复造轮子）
 
 | 需求 | 推荐路线 | 说明 |
