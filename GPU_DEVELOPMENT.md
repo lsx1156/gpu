@@ -232,7 +232,7 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
   - **枚举 → vkCreateDevice → vkQueueSubmit(空) → vkWaitForFences → vkQueueWaitIdle → clean exit 全绿，无 GPU hang**。
 - **坑**：交叉编译 vkenum 时 `-ldl` 链接失败——glibc 2.39 已把 dl 系列并入 libc，直接去掉 `-ldl`；多架构头仍需 `-isystem sysroot/usr/include/aarch64-linux-gnu`。
 - **下一步**：非空命令缓冲录制/提交（`vkBeginCommandBuffer` 会触发 `TU_CALLX(tu6_init_hw)` 的 A5XX 分支 + IB1 非空解析），然后逐步对照 fd5 gallium 补寄存器包。
-- **源码归档约定**：`work/` 在 .gitignore 内（mesa 源码树不入库），tu5xx 的全部 mesa 侧改动以**整文件快照**镜像到 `patches/mesa-24.0.5-tu5xx/`（保持相对路径，覆盖回源码树即还原），随 git 提交归档。当前改动 = 6 个文件：`tu_common.h`、`tu_device.cc`、`vulkan/meson.build`、`freedreno_gpu_event.h`、`tu_cmd_buffer.cc`、`gen_header.py`。
+- **源码归档约定**：`work/` 在 .gitignore 内（mesa 源码树不入库），tu5xx 的全部 mesa 侧改动以**整文件快照**镜像到 `patches/mesa-24.0.5-tu5xx/`（保持相对路径，覆盖回源码树即还原），随 git 提交归档。当前改动 = 14 个文件：`tu_common.h`、`tu_device.cc`、`tu_util.h`、`vulkan/meson.build`、`freedreno_gpu_event.h`、`gen_header.py`、`tu_cmd_buffer.cc`、`tu_pipeline.cc`、`tu_pipeline.h`、`tu_shader.cc`、`tu_formats.cc`、`tu_formats.h`、`tu_lrz.cc`、`tu_autotune.cc`。
 
 ### M1.2 产出二：非空命令缓冲录制/提交打通（2026-08-31）
 
@@ -249,6 +249,20 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **a5xx 头引入方式（关键坑）**：`tu_common.h` 直接 include `a5xx.xml.h`（c-defines）会与 `a6xx.xml.h` 的 unscoped enum 冲突（`PERF_LRZ_*`/`PERF_CMPDECMP_*` 等枚举成员同名，C++ 作用域冲突）。解法：**`namespace a5xx_xml { #include "a5xx.xml.h" } using namespace a5xx_xml;`**——REG_A5XX_* 是宏不受 namespace 影响；static inline 打包函数经 using 引入；同名枚举成员按名字隐藏规则由全局（a6xx）胜出，无二义。另需先 include `util/half_float.h`（a5xx half-float 字段打包函数用 `_mesa_float_to_half`；gallium 的 `util/u_half.h` 不在 turnip include path）。
 - **验证**：构建通过 → 设备实测非空 CB（含完整 a5xx init 寄存器包）提交 → **fence OK、无 hang、无 fault，dmesg 无新 GPU 错误**——这是 A506 上第一条由自研 tu5xx 驱动构造并被 GPU 真实执行的非平凡命令流。
 - **下一步**：renderpass/GMEM 路径（a5xx 无 CP_COND_REG_EXEC，需按 fd5 的 GRAS_SC_BIN_CNTL + CP_SET_RENDER_MODE(GMEM) 方式重构 tu 渲染流程），然后管线状态 + CP_DRAW 第一个三角形。
+
+### M1.3：第一个 vkCmdDraw 三角形打通（2026-09-01）
+
+- **vktriangle 测试桩**（`work/vktriangle/`，`git add -f` 入库）：renderpass + graphics pipeline + VBO + 录制（BeginRenderPass → vkCmdDraw(3) → End）+ 提交 + fence 等待，全链路探针输出；SPIR-V 用 `gen_spirv.py` 手工生成（VS: gl_VertexIndex 查表 → gl_Position；FS: 纯色输出）。
+- **A5XX 渲染路径特化**（对照 fd5 gallium 批量补齐）：`tu5_emit_program_config`（HLSQ/SP xS_CONFIG + constoff/instroff 分配 + HLSQ_CONTROL_0..4 + GRAS_CNTL/RB_RENDER_CONTROL0/1 + SP_FS_OUTPUT_REG）、VPC 连线、vertex_input（VFD_FETCH/DECODE 按属性逐个发射）、viewport/scissor/rast/blend/zsa、draw 路径（CP_LOAD_STATE4、tu6_emit_vs_params 的 VFD_INDEX_OFFSET 模式）。
+- **修过的四类硬伤**（均经 devcoredump 解码定位）：
+  1. **命令流失步**（CP | opcode error 0x480B7A01）：`tu_emit_cache_flush_ccu` 的 A5XX 分支空寄存器对 → `tu_cs_emit_regs` 发出悬空 pkt4 包头；修为 `CHIP != A5XX` 才发。
+  2. **a6xx 寄存器泄漏**（protected mode error | WRITE）：autotune（RB_SAMPLE_COUNT_*）在 A5XX 禁用；LRZ 相关（`tu6_emit_lrz_buffer`/`tu6_write_lrz_reg`）A5XX 直接禁用；`tu6_emit_msaa` 加 A5XX 分支（GRAS_SC_*_MSAA_CNTL / RB_*_MSAA_CNTL）。
+  3. **CP_SET_DRAW_STATE 组表越界**（opcode 0x70430015）：a5xx 固件组表 gid 支持有限 → `tu_cs_emit_draw_state` 对 A5XX 加 `LOAD_IMMED` 位立即执行组内容（禁用组不带 LOAD_IMMED）；VB draw state 在 A5XX 不创建（空 BO 会被解析成 pkt4 reg=0）。
+  4. **FS 状态组 a6xx 泄漏**（WRITE addr=0x4，HLSQ_CONTROL_1..5 对 a5xx 解析成 reg=0）：`tu6_emit_fs`/`tu6_emit_fs_inputs`/`tu6_emit_fs_outputs` A5XX 特化——inputs 全部由 program_config 覆盖后 early-return；outputs 只发 `A5XX_RB_RENDER_COMPONENTS`（RT0..RT7）；VFD_CONTROL_6/PC_PS_CNTL 为 a6xx 专属跳过。
+- **调参工具**：`parse_devcd.py`（devcoredump ascii85 解码 + PM4 逐包解析）、`find_bad.py`（BO 内搜 dword 上下文）、`decode_groups.py`（IB2 组表逐组解码）。
+- **实测结果（2026-09-01，A506 真机）**：`dmesg -C` 清空后连续两次运行 vktriangle —— **vkCreateInstance → … → vkCmdDraw(3) → vkWaitForFences OK（不 hang）→ vkQueueWaitIdle OK → clean exit 全绿，dmesg 0 行（无 fault/opcode error/protected mode error/hangcheck）**。
+- **意义**：A506 上第一个由自研 tu5xx 驱动完成的真实 GPU 绘制（sysmem 模式，renderpass + pipeline + draw + fence 全链路）。Vulkan 从"放弃"改为 tu5xx 自研路线可继续推进。
+- **归档**：patches 快照同步为 14 文件；驱动部署于设备 `~/tu5xx/libvulkan_freedreno.so`。
 
 ---
 

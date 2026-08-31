@@ -1097,6 +1097,10 @@ tu5_emit_xs(struct tu_cs *cs,
             const struct tu_pvtmem_config *pvtmem,
             uint64_t binary_iova)
 {
+   /* shader stage disabled（与 tu6_emit_xs 一致，如 empty shader 场景） */
+   if (!xs)
+      return;
+
    switch (stage) {
    case MESA_SHADER_VERTEX:
    case MESA_SHADER_FRAGMENT:
@@ -1629,6 +1633,13 @@ template <chip CHIP>
 static void
 tu6_emit_fs_inputs(struct tu_cs *cs, const struct ir3_shader_variant *fs)
 {
+   /* tu5xx: a5xx 无 SP_FS_PREFETCH_CNTL/RB_SAMPLE_CNTL/VPC_VAR_DISABLE/
+    * VPC_CNTL_0 等 a6xx 寄存器；HLSQ_CONTROL_1..5 对 a5xx 解析为 reg=0。
+    * a5xx 所需的 HLSQ_CONTROL_0..4、GRAS_CNTL、RB_RENDER_CONTROL0/1 已由
+    * pipeline 的 tu5_emit_program_config 按 fd5_program_emit 发射。 */
+   if (cs->device->physical_device->info->chip == 5)
+      return;
+
    uint32_t face_regid, coord_regid, zwcoord_regid, samp_id_regid;
    uint32_t ij_regid[IJ_COUNT];
    uint32_t smask_in_regid;
@@ -1789,6 +1800,31 @@ tu6_emit_fs_outputs(struct tu_cs *cs,
                     const struct ir3_shader_variant *fs)
 {
    uint32_t smask_regid, posz_regid, stencilref_regid;
+
+   /* tu5xx: SP_FS_OUTPUT_REG 已由 tu5_emit_program_config 发射；
+    * SP_FS_OUTPUT_CNTL0/SP_FS_RENDER_COMPONENTS/RB_FS_OUTPUT_CNTL0 为
+    * a6xx 专属。a5xx 只需 RB_RENDER_COMPONENTS（fd5_emit RT0..RT7）。 */
+   if (cs->device->physical_device->info->chip == 5) {
+      uint32_t rt_comp[8] = {};
+      for (uint32_t i = 0; i < 8; i++) {
+         uint32_t color_regid = fs->color0_mrt ?
+            ir3_find_output_regid(fs, FRAG_RESULT_COLOR) :
+            ir3_find_output_regid(fs,
+               (gl_varying_slot) (FRAG_RESULT_DATA0 + i));
+         if (VALIDREG(color_regid))
+            rt_comp[i] = 0xf;
+      }
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_RENDER_COMPONENTS, 1);
+      tu_cs_emit(cs, A5XX_RB_RENDER_COMPONENTS_RT0(rt_comp[0]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT1(rt_comp[1]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT2(rt_comp[2]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT3(rt_comp[3]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT4(rt_comp[4]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT5(rt_comp[5]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT6(rt_comp[6]) |
+                     A5XX_RB_RENDER_COMPONENTS_RT7(rt_comp[7]));
+      return;
+   }
 
    posz_regid      = ir3_find_output_regid(fs, FRAG_RESULT_DEPTH);
    smask_regid     = ir3_find_output_regid(fs, FRAG_RESULT_SAMPLE_MASK);
@@ -2033,6 +2069,19 @@ void
 tu6_emit_fs(struct tu_cs *cs,
             const struct ir3_shader_variant *fs)
 {
+   /* tu5xx: VFD_CONTROL_6/PC_PS_CNTL 为 a6xx 专属（a5xx primid 经
+    * VPC_VAR 路径，fd5 无此配置）；其余 FS 状态由下面的
+    * tu6_emit_fs_inputs/outputs 的 a5xx 分支处理。 */
+   if (cs->device->physical_device->info->chip == 5) {
+      if (fs) {
+         tu6_emit_fs_outputs(cs, fs);
+      } else {
+         struct ir3_shader_variant dummy_variant = {};
+         tu6_emit_fs_outputs(cs, &dummy_variant);
+      }
+      return;
+   }
+
    tu_cs_emit_pkt4(cs, REG_A6XX_VFD_CONTROL_6, 1);
    tu_cs_emit(cs, COND(fs && fs->reads_primid, A6XX_VFD_CONTROL_6_PRIMID4PSEN));
 

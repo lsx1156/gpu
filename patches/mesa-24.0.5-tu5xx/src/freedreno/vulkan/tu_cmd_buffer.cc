@@ -783,33 +783,59 @@ tu_cs_emit_draw_state(struct tu_cs *cs, uint32_t id, struct tu_draw_state state)
        state.writeable)
       enable_mask |= CP_SET_DRAW_STATE__0_DIRTY;
 
+   /* tu5xx: a5xx 固件 draw-state 组表仅支持有限 gid（fd5 从不用组表），
+    * 而 tu 的 TU_DRAW_STATE_* 枚举到 19+（gid 9/10/11/12/26 等越界，
+    * 实测导致 CP 失步 opcode error 0x480B7A01）。a5xx 一律用 LOAD_IMMED
+    * 立即执行组，不落固件组表。 */
+   const bool is_a5xx = cs->device->physical_device->info->chip == 5;
+
+   /* tu5xx: 禁用组（size=0/iova=0）与 fd5 一致只发 DISABLE，不带 LOAD_IMMED */
    tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(state.size) |
                   enable_mask |
+                  COND(is_a5xx && state.size && state.iova,
+                       CP_SET_DRAW_STATE__0_LOAD_IMMED) |
                   CP_SET_DRAW_STATE__0_GROUP_ID(id) |
                   COND(!state.size || !state.iova, CP_SET_DRAW_STATE__0_DISABLE));
    tu_cs_emit_qw(cs, state.iova);
 }
 
 void
-tu6_emit_msaa(struct tu_cs *cs, VkSampleCountFlagBits vk_samples,
-              bool msaa_disable)
+tu6_emit_msaa(struct tu_device *dev, struct tu_cs *cs,
+              VkSampleCountFlagBits vk_samples, bool msaa_disable)
 {
    const enum a3xx_msaa_samples samples = tu_msaa_samples(vk_samples);
    msaa_disable |= (samples == MSAA_ONE);
-   tu_cs_emit_regs(cs,
-                   A6XX_SP_TP_RAS_MSAA_CNTL(samples),
-                   A6XX_SP_TP_DEST_MSAA_CNTL(.samples = samples,
+
+   if (dev->physical_device->info->chip == 5) {
+      /* tu5xx: a5xx 无 SP_TP_*_MSAA；GRAS 侧为 GRAS_SC_*（fd5 的
+       * fd5_emit_msaa 模式），地址连续用 pkt4 一次发射。 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_RAS_MSAA_CNTL, 2);
+      tu_cs_emit(cs, A5XX_GRAS_SC_RAS_MSAA_CNTL_SAMPLES(samples));
+      tu_cs_emit(cs, A5XX_GRAS_SC_DEST_MSAA_CNTL_SAMPLES(samples) |
+                     COND(msaa_disable, A5XX_GRAS_SC_DEST_MSAA_CNTL_MSAA_DISABLE));
+   } else {
+      tu_cs_emit_regs(cs,
+                      A6XX_SP_TP_RAS_MSAA_CNTL(samples),
+                      A6XX_SP_TP_DEST_MSAA_CNTL(.samples = samples,
+                                                .msaa_disable = msaa_disable));
+
+      tu_cs_emit_regs(cs,
+                      A6XX_GRAS_RAS_MSAA_CNTL(samples),
+                      A6XX_GRAS_DEST_MSAA_CNTL(.samples = samples,
+                                               .msaa_disable = msaa_disable));
+   }
+
+   if (dev->physical_device->info->chip == 5) {
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_RAS_MSAA_CNTL, 2);
+      tu_cs_emit(cs, A5XX_RB_RAS_MSAA_CNTL_SAMPLES(samples));
+      tu_cs_emit(cs, A5XX_RB_DEST_MSAA_CNTL_SAMPLES(samples) |
+                     COND(msaa_disable, A5XX_RB_DEST_MSAA_CNTL_MSAA_DISABLE));
+   } else {
+      tu_cs_emit_regs(cs,
+                      A6XX_RB_RAS_MSAA_CNTL(samples),
+                      A6XX_RB_DEST_MSAA_CNTL(.samples = samples,
                                              .msaa_disable = msaa_disable));
-
-   tu_cs_emit_regs(cs,
-                   A6XX_GRAS_RAS_MSAA_CNTL(samples),
-                   A6XX_GRAS_DEST_MSAA_CNTL(.samples = samples,
-                                            .msaa_disable = msaa_disable));
-
-   tu_cs_emit_regs(cs,
-                   A6XX_RB_RAS_MSAA_CNTL(samples),
-                   A6XX_RB_DEST_MSAA_CNTL(.samples = samples,
-                                          .msaa_disable = msaa_disable));
+   }
 }
 
 static void
@@ -824,7 +850,7 @@ tu6_update_msaa(struct tu_cmd_buffer *cmd)
     */
    if (samples == 0)
       samples = VK_SAMPLE_COUNT_1_BIT;
-   tu6_emit_msaa(&cmd->draw_cs, samples, cmd->state.msaa_disable);
+   tu6_emit_msaa(cmd->device, &cmd->draw_cs, samples, cmd->state.msaa_disable);
 }
 
 static void
@@ -2646,8 +2672,13 @@ tu_CmdBindVertexBuffers2(VkCommandBuffer commandBuffer,
                                         pStrides);
    }
 
-   cmd->state.vertex_buffers.iova =
-      tu_cs_draw_state(&cmd->sub_cs, &cs, 4 * cmd->state.max_vbs_bound).iova;
+   /* tu5xx: a5xx 的 VFD_FETCH 由 vertex_input 动态状态按属性逐个发射
+    * （含属性偏移），VB draw state 本身冗余；空组会被 CP 当全 0 数据
+    * 解析成 pkt0(reg=0) 保护错，故 a5xx 干脆不创建该 draw state。 */
+   if (cmd->device->physical_device->info->chip != 5) {
+      cmd->state.vertex_buffers.iova =
+         tu_cs_draw_state(&cmd->sub_cs, &cs, 4 * cmd->state.max_vbs_bound).iova;
+   }
 
    for (uint32_t i = 0; i < bindingCount; i++) {
       if (pBuffers[i] == VK_NULL_HANDLE) {
@@ -2661,8 +2692,6 @@ tu_CmdBindVertexBuffers2(VkCommandBuffer commandBuffer,
       }
    }
 
-   /* tu5xx: a5xx 的 VFD_FETCH 由 vertex_input 动态状态按属性逐个发射
-    * （含属性偏移），这里不再写 a6xx 的 VFD_FETCH_INSTR 寄存器。 */
    if (cmd->device->physical_device->info->chip != 5) {
       for (uint32_t i = 0; i < cmd->state.max_vbs_bound; i++) {
          tu_cs_emit_regs(&cs,
