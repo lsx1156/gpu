@@ -179,6 +179,29 @@ exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
 
 ---
 
+## 四·补2 M1：给 freedreno 写 a5xx（tu5xx）Vulkan 后端（M1.0 起步，2026-08-31）
+
+### 立项背景
+Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端。M1 的目标是为 freedreno 自研 a5xx Vulkan 后端（tu5xx），分里程碑推进，M1.0 = 先打通 **Mesa 24.0.5 交叉编译** 可构建基线。
+
+### M1.0 产出一：Mesa 24.0.5 交叉编译打通（2026-08-31）
+- 平台：PC（x86_64, Windows）→ aarch64；工具链 `tools/bin/aarch64-none-linux-gnu-*`（ARM 官方 15.2.Rel1）+ 设备 sysroot（`sysroot/`）。
+- 复用并封装为 `mesa-cross/cross-aarch64.ini`（cross-file）与 `mesa-cross/build-mesa.ps1`（一键 setup/reconf/build）。
+- 构建开关：`-Dgallium-drivers=freedreno -Dvulkan-drivers=freedreno`，关 opengl/gles/llvm/video/X11（`platforms=` 空、egl/glx/gbm disabled），仅产出 freedreno GL + Turnip Vulkan。
+- **核心成功产物**：`work/mesa-build/src/freedreno/vulkan/libvulkan_freedreno.so`（**8.8MB**，readelf 证实 ELF64 little-endian，`Type: DYN / Machine: AArch64`），即 turnip 的 Vulkan 后端用户态库；配套 ICD `freedreno_icd.aarch64.json` 亦由 meson 生成。
+- M1.0 里程碑验收 = **Mesa 24.0.5 可交叉构建出 turnip `.so`**，已达标。
+
+### M1.0 遇到并已解决的坑（供复用）
+- **C++ 编译参数未生效**：`cross-aarch64.ini` 中 `cpp_args/c_link_args/cpp_link_args` 若缩进到`[properties]`内会被 meson 忽略，必须顶格（列 0）写在 `[properties]` 下，且系统多架构头需 `-isystem sysroot/usr/include/aarch64-linux-gnu` 显式指路。
+- **pkgconf 3.0.5 拼错 multiarch libdir**：`PKG_CONFIG_SYSROOT_DIR` 开启时，libz/libdrm/libexpat 的 `-L` 被拼成 `sysroot/usr/lib/**lib**/aarch64-linux-gnu`（多一层 `lib/`），导致 `-lz/-ldrm/-lexpat` 找不到。非持久解法：在 `sysroot/usr/lib/lib/aarch64-linux-gnu` 建目录放入实体库副本（**不能用 junction**——junction 内 symlink 无法被 GNU ld 解析，报 `file not recognized`）。
+- **libexpat.so.1.9.1 损坏**：sysroot 内该文件被提取时损坏（readelf `Machine: <unknown>: 0xbfef` + `e_shentsize` 小于 section header 大小）。从设备重拉干净副本（198712B）替换后链接通过。
+- 失败工具（`fd5_layout/fd6_layout/ir3_delay_test/ir3_disasm` 等）仅是 `-Dbuild-tests=false` 未覆盖的旧测试目标，非驱动核心，不影响 `.so` 产出。
+
+### M1.1 待办（未做）
+- 改 turnip 门禁（`tu_device.cc`）允许 a5xx/A506 枚举，让 vkenum 能列出物理设备，再逐层搭建 tu5xx 命令流后端。
+
+---
+
 ## 五、开发路线建议（避免反复造轮子）
 
 | 需求 | 推荐路线 | 说明 |
