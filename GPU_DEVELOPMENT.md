@@ -212,6 +212,12 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - 注：Features/扩展清单仍出自 a6xx 硬编码模板（零初始化 a5xx 子结构使部分位默认 0），真实能力需在 M1.2 命令流落地后逐项校准。
 - M1.2 = tu5xx 命令流后端（vkQueueSubmit 空提交/围栏先行，对照 fd5 gallium 寄存器写法）。
 
+### M1.2 产出〇：内核提交链路验证（2026-08-31）
+- vkenum 桩再扩展：`vkGetDeviceQueue` → `vkQueueSubmit`（0 个 command buffer，合法空提交）+ fence → `vkWaitForFences` → `vkQueueWaitIdle`。
+- 实测 A506：**空提交 VK_SUCCESS、围栏 OK、QueueWaitIdle OK，无 GPU hang**。dmesg 证实 `a530_pm4.fw/a530_pfp.fw` 微码已加载，msm 内核提交路径（`tu_knl_drm_msm.cc` 的 submitqueue/entry/fence 机制）在 a5xx 分支全通。
+- **意义**：M1.2 剩余工作收敛为纯用户态命令流——即 `<A5XX>` 模板 variant + `tu5xx_init_hw`/寄存器包（对照 fd5 gallium）。内核侧无需再动。
+- 热点预判（调研结论）：①`tu_BeginCommandBuffer` 必调 `TU_CALLX(tu6_init_hw)`（a6xx 寄存器初始化，a5xx 非法）②`tu_cmd_buffer.cc:485-519` `has_cp_reg_write=false`（a5xx 零初始化命中 no_track）路径直接写 `REG_A6XX_RB_RENDER_CNTL` ③meson `--tmpl-variants '<A6XX>' '<A7XX>'` 需加 `<A5XX>` ④fd5 资产：`a5xx/fd5_emit.c`、`fd5_draw.c`、`registers/adreno/a5xx.xml`、ir3 本身支持 a5xx。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）
