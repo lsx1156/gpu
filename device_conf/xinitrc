@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+export DISPLAY=:0
+export T0=$(date +%s)
+exec >> /home/umeko/.kiosk-x.log 2>&1
+echo "T0 kiosk_start: $T0"
+echo "==== kiosk start $(date) ===="
+for o in $(xrandr --query 2>/dev/null | awk '/ connected/ && !/^[[:space:]]/{print $1}'); do
+  echo "rotate: $o"
+  xrandr --output "$o" --rotate right || true
+done
+echo "--- xrandr after ---"
+xrandr | grep -E " connected|*"
+openbox &
+echo "T_openbox_launched $(($(date +%s)-T0))s"
+unclutter -idle 0 &
+sleep 1
+echo "等待 Grafana 就绪..."
+until curl -sf -o /dev/null http://127.0.0.1:3000/api/health; do sleep 2; done
+echo "T_grafana_ready $(($(date +%s)-T0))s"
+echo "Grafana 就绪，启动浏览器"
+echo "T_chromium_exec $(($(date +%s)-T0))s"
+exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate --force-device-scale-factor=1.5 --disable-frame-rate-limit --user-data-dir=/home/umeko/.kiosk --enable-gpu http://127.0.0.1:3000/d/netdata-system-zh?kiosk

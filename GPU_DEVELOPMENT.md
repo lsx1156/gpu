@@ -61,17 +61,27 @@ sudo apt-get install -y --allow-downgrades \
 
 ---
 
-## 四、Chromium 为何只能软渲染（问题链路分析）
+## 四、Chromium 为何只能软渲染（2026-08-31 根因修正）
 
-Chromium 走 **ANGLE** 抽象层，其 GPU 合成路径在 Adreno 506 上失败：
+**真正的死因（~/.kiosk-x.log 铁证）**：
 
-1. **Turnip Vulkan 后端不可用**：ANGLE 依赖的 Vulkan 后端在 Adreno 506 上无 Turnip 支持。
-2. **内核 `DRM_MSM_GEM_INFO` 报 `-22`**：元数据设置失败（Mesa 26.x 与内核 6.7.5 的兼容性问题）。
-3. **GPU 进程反复崩溃**：`exit_code=512`。
+```
+ERROR:ui/gl/init/gl_factory.cc:110] Requested GL implementation (gl=none,angle=none)
+  not found in allowed implementations: [(gl=egl-angle,angle=default)].
+ERROR:components/viz/.../viz_main_impl.cc:190] Exiting GPU process due to errors during initialization
+```
 
-**结论**：Adreno 506 原生 GLES 没问题，但 **Chromium 的 GPU 合成路径在这张卡上不可用**。
+1. **`--use-gl=egl` 是已废除的老参数**：现版本 Chromium 将其解析为 `gl=none,angle=none`，不在允许列表中 → GPU 进程反复启动即崩（即历史上的 exit_code=512），随后 chromium 内部以 `--use-gl=disabled` 降级运行。与 Turnip/内核 -22 无关。
+2. **旧结论修正**：`.profile`/`.xsessionrc` 里堆叠的 `LIBGL_ALWAYS_SOFTWARE=1` / `GALLIUM_DRIVER=llvmpipe` / `QT_XCB_FORCE_SOFTWARE_OPENGL=1` 属"休眠地雷"——kiosk 启动链（login → .bash_profile → startx → .xinitrc）并不读取它们，活会话进程环境实测干净。已全部清理。
+3. GPU 进程存活后若仍有 -22 相关崩溃，再回头清理 Mesa 26.1.7 gallium 混装（候选手段）。
 
-Chromium 稳定运行参数（必须带上）：
+**已应用的修复（2026-08-31，待重启验证）**（设备侧均有 .bak-20260831 备份，快照存 device_conf/）：
+
+- `.xinitrc`：删除 `--use-gl=egl --use-angle=native --enable-gpu-compositing=false --disable-gpu-rasterization`，仅保留 `--enable-gpu`（走默认 egl-angle → Mesa EGL → freedreno FD506）
+- `.profile` / `.xsessionrc`：删除全部软渲染变量（保留 QT 缩放、CLUTTER_BACKEND=glx）
+- 新增 zram：`/etc/default/zramswap`（ALGO=lz4, PERCENT=50 ≈ 1.4G），zramswap.service 开机自启
+
+**若重启后 GPU 进程仍崩溃的回退方案**（旧经验参数）：
 
 ```bash
 --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization
@@ -90,9 +100,10 @@ Chromium 稳定运行参数（必须带上）：
 
 ### 综合开发检查清单
 
-- [ ] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA
-- [ ] Chromium 启动参数必须带 `--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization`
-- [ ] Web 缩放用 `zoom`，不用 `transform: scale()`
+- [ ] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（残留 26.1.7 gallium 待清理）
+- [ ] Chromium 启动参数已去掉 `--use-gl=egl`（老参数，GPU 进程死因），当前 `--enable-gpu`；重启验证 GPU 进程存活，失败则回退 `--disable-gpu --disable-gpu-compositing --disable-gpu-rasterization`
+- [ ] 会话/配置文件中禁止出现 `LIBGL_ALWAYS_SOFTWARE` / `GALLIUM_DRIVER=llvmpipe`（已清理，勿再加）
+- [ ] Web 缩放用 `zoom`，不用 `transform: scale()`（软渲染下合成层会黑屏；GPU 合成开启后此限制待复测）
 - [ ] 需要 GPU 加速的场景优先考虑原生 EGL/GLES，而非浏览器
 - [ ] Vulkan 相关需求直接排除
 
@@ -104,7 +115,7 @@ Chromium 稳定运行参数（必须带上）：
 能。原生 EGL/GLES 走 Freedreno 完全可用，glmark2 200+ FPS。
 
 **Q2：为什么 Chromium 黑屏/崩溃？**
-ANGLE 层依赖 Vulkan（Turnip 不支持 A506）+ 内核 `DRM_MSM_GEM_INFO -22`，GPU 进程崩溃（exit_code=512）。只能软渲染。
+（2026-08-31 修正）真凶是启动参数 `--use-gl=egl`——已废除的老参数，被解析为 `gl=none,angle=none`，GPU 进程启动即崩（exit_code=512）。已修复待验证。
 
 **Q3：为什么不用 Mesa 26.x？**
 与内核 6.7.5 不兼容，`DRM_MSM_GEM_INFO` 返回 -22。必须锁 24.0.5。
