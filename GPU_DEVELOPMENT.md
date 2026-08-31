@@ -218,6 +218,22 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **意义**：M1.2 剩余工作收敛为纯用户态命令流——即 `<A5XX>` 模板 variant + `tu5xx_init_hw`/寄存器包（对照 fd5 gallium）。内核侧无需再动。
 - 热点预判（调研结论）：①`tu_BeginCommandBuffer` 必调 `TU_CALLX(tu6_init_hw)`（a6xx 寄存器初始化，a5xx 非法）②`tu_cmd_buffer.cc:485-519` `has_cp_reg_write=false`（a5xx 零初始化命中 no_track）路径直接写 `REG_A6XX_RB_RENDER_CNTL` ③meson `--tmpl-variants '<A6XX>' '<A7XX>'` 需加 `<A5XX>` ④fd5 资产：`a5xx/fd5_emit.c`、`fd5_draw.c`、`registers/adreno/a5xx.xml`、ir3 本身支持 a5xx。
 
+### M1.2 产出一：A5XX 模板 variant 编入 turnip .so + 设备空提交全绿（2026-08-31）
+
+- **改动清单**（全部为最小侵入）：
+  1. `tu_common.h`：`TU_GPU_GENS` 加入 `A5XX`；`TU_CALLX` 加 `case 5`。
+  2. `tu_device.cc`：设备调度表 `case 5` → `tu_device_entrypoints_a5xx`。
+  3. `meson.build`（vulkan）：`--tmpl-variants` 加 `<A5XX>`。
+  4. `freedreno_gpu_event.h`：新增 `fd_gpu_events<A5XX>` 特化表（a5xx 原生 CP 事件映射；a6xx-only 事件用占位）。
+  5. `tu_cmd_buffer.cc`：`tu6_init_hw` A5XX 特化（最小实现仅 WFI，跳过全部 a6xx 寄存器）；`tu_emit_raw_event_write` A5XX 走老 `CP_EVENT_WRITE`（非 CP_EVENT_WRITE7）；`tu6_emit_render_cntl<A5XX>` stub（no-op，fd5 用 RB_RENDER_CONTROL+GRAS_*，待对照补齐）。
+  6. **`gen_header.py` 修复（关键）**：`dump_reg_variants()` 生成的 `__REG<CHIP>` 模板打包函数原以 `assert(!"invalid variant")` 结尾且无 return，A5XX 实例化时 fallthrough → `-Werror=return-type` 大面积报错（HLSQ_*/SP_2D_*/RB_*/PC_* 等约 40 处）。修法：末尾改生成 `{ assert(!"invalid variant"); return (struct fd_reg_pair) {}; }`——`.reg==0` 的 pair 会被 `tu_cs_emit_regs` 的 `__ONE_REG`（`regs[i].reg > 0` 才写）**静默丢弃**，语义正好 = "该寄存器本代不适用"。调试构建下 assert 仍会触发，便于发现误用。
+  7. `tu6_emit_render_cntl` 模板前置声明 + A5XX 特化在调用点之前（否则 `used but never defined`）。
+- **验证**：干净构建（0 error，warning 已清）→ `libvulkan_freedreno.so`（9.1MB，含 A5XX variant）→ 部署设备 `~/tu5xx/` 实测 vkenum：
+  - **枚举 → vkCreateDevice → vkQueueSubmit(空) → vkWaitForFences → vkQueueWaitIdle → clean exit 全绿，无 GPU hang**。
+- **坑**：交叉编译 vkenum 时 `-ldl` 链接失败——glibc 2.39 已把 dl 系列并入 libc，直接去掉 `-ldl`；多架构头仍需 `-isystem sysroot/usr/include/aarch64-linux-gnu`。
+- **下一步**：非空命令缓冲录制/提交（`vkBeginCommandBuffer` 会触发 `TU_CALLX(tu6_init_hw)` 的 A5XX 分支 + IB1 非空解析），然后逐步对照 fd5 gallium 补寄存器包。
+- **源码归档约定**：`work/` 在 .gitignore 内（mesa 源码树不入库），tu5xx 的全部 mesa 侧改动以**整文件快照**镜像到 `patches/mesa-24.0.5-tu5xx/`（保持相对路径，覆盖回源码树即还原），随 git 提交归档。当前改动 = 6 个文件：`tu_common.h`、`tu_device.cc`、`vulkan/meson.build`、`freedreno_gpu_event.h`、`tu_cmd_buffer.cc`、`gen_header.py`。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）
