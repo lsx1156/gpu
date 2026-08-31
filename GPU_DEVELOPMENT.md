@@ -61,12 +61,32 @@ sudo apt-get install -y --allow-downgrades \
 
 ---
 
-## 四、Chromium 渲染配置终版（2026-08-31 下午三轮实验定版）
+## 四、Chromium 渲染配置终版（2026-08-31 ANGLE 专项结案定版）
 
-**终版结论（三层）：**
+**终版结论（四层）：**
 1. **GPU watchdog 误杀**（上午修复，仍有效）：`--disable-gpu-watchdog` 必需，否则 GPU 进程初始化 >30s 被 watchdog 爆破（exit_code=512）。
-2. **硬件合成黑屏**（下午实证）：去掉 `--disable-gpu-compositing` 后 GPU 进程稳定、无新 dump，但**物理屏全黑**（X 帧缓冲截图仅剩 openbox 空桌面 8.5KB，鼠标指针正常）——Chromium 内容走 DRM overlay plane 后**提交不到物理面板**。上一次"全黑有鼠标"事件的根因就是这个，与 Mesa 混装无关。**`--disable-gpu-compositing` 必须保留（软件合成）**。
-3. **ANGLE 硬件加速实际未生效**（2026-08-31 下午新发现，待专项）：t4 实验实例 stderr 实录 `ANGLE Display::initialize error 12289: Could not create a backing OpenGL context` → `EGL_NOT_INITIALIZED, trying next display type`——`--enable-gpu --use-angle=gles` 的 EGL 路径初始化失败，Chromium 回退软渲染。**canvas 图表慢（Grafana 面板初始化 2-4 分钟）的直接原因**。此前"硬件路径确认"的判定（SwiftShader 0 次 + MESA BO 警告）不成立：BO 警告只能证明 freedreno 库被加载，不能证明 context 创建成功。这是"驱动没发挥"审计的最大问题。
+2. **硬件合成黑屏**（下午实证）：去掉 `--disable-gpu-compositing` 后 GPU 进程稳定、无新 dump，但**物理屏全黑**——Chromium 内容走 DRM overlay plane 后**提交不到物理面板**。**`--disable-gpu-compositing` 必须保留（软件合成）**。
+3. **ANGLE 硬件加速判死**（傍晚专项结案，见下节）：ANGLE 全后端在此设备不可用，Chromium 151 Linux 仅 ANGLE 一个 GL 后端 → **Chromium 硬件加速在当前驱动栈上无解**。渲染定版 SwiftShader 软渲染。
+4. **缩放**：`--force-device-scale-factor=1.5` 已移除（软渲染下渲染量 ×2.25，代价过高，降回 1x）。
+
+### ANGLE 专项结案（2026-08-31 傍晚，drmm-engine=0 铁证）
+
+**失败矩阵（t5-t9 五组实验）：**
+
+| 配置 | ANGLE 行为 | 结果 |
+|---|---|---|
+| gles + GPU沙箱 | 快速报错（12289） | 软渲染（快速失败）✓ 可用 |
+| gles + --no-sandbox / --disable-gpu-sandbox | **0 报错 ≠ 成功**：卡进 msm_dri 超慢循环 **~22 分钟**（gdb 实证主线程 R 状态自旋于 msm_dri.so 文件偏移 0xA44AC4 一带，LR 0xA45130-58，双层 (n,m) 枚举循环） | 最终"完成"但 **drm-engine-gpu: 0 ns / drm-cycles-gpu: 0**（fdinfo 铁证）——**从未提交任何 GPU 命令**，纯浪费 22 分钟 |
+| gl（桌面GL/GLX）+ 任意沙箱 | 快速报错（16 次） | use-gl=disabled，软渲染 |
+| **swiftshader（终版）** | 不触碰系统 GL | GPU 进程正常（state=S），kiosk 热缓存 **34 秒加载完成** ✓ |
+
+**关键教训：**
+- "ANGLE 报错 0 次"不等于初始化成功——t5/t6 实验只 grep 了错误行数，进程其实卡在 22 分钟循环里还没走到报错点
+- 验证硬件加速的金标准是 **/proc/<gpu_pid>/fdinfo 的 drm-engine-gpu**，不是日志
+- msm_dri.so 的 22 分钟死循环（stripped，函数未命名）只在 EGL platform 路径触发；标准 X11 EGL 序列（eglprobe 自制探针：Initialize→ChooseConfig→ES3 Context→MakeCurrent）与 surfaceless 路径**均正常秒过**，glmark2 亦正常——**Chromium GPU 进程的 ANGLE 调用序列触发了 freedreno 某条特殊路径**，待 tu5xx/Mesa 升级后再回头查
+- 探针工具留存：`work/eglprobe.c`（X11 标准序列）、`work/eglprobe2.c`（surfaceless/GBM/device）、`work/msm_dri.so`（PC 留档，死循环偏移 0xA44AC4）
+
+**内核侧旁证（与本问题无关但需记档）：** 内核 6.7.5-rv2 存在 `block_devnode+0x4` NULL deref Oops（fwupd 读块设备 uevent 触发，开机 1 小时内发生 5 次，Tainted: D W）——上游主线已知问题类别，M1 内核阶段可顺手补修。另 `fb_set_par error -16 (EBUSY)` 反复出现，与 Xorg fbdev 交互相关，暂无实际影响。
 
 ### 证据链（watchdog 修复，上午）
 
@@ -108,16 +128,17 @@ sudo apt-get install -y --allow-downgrades \
 ```bash
 exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
   --disable-gpu-watchdog --disable-gpu-compositing --disable-background-networking \
-  --force-device-scale-factor=1.5 \
-  --user-data-dir=/home/umeko/.kiosk --enable-gpu --use-angle=gles \
+  --use-angle=swiftshader \
+  --user-data-dir=/home/umeko/.kiosk \
   http://127.0.0.1:3000/d/netdata-system-zh?kiosk
 ```
 
 ### 已知代价与运维注意
 
 - watchdog 禁用后，GPU 进程**真挂死不会自愈**（画面冻结但进程在）→ 处置：`pkill -f '/usr/lib/chromium/chromium'`，getty autologin 循环会自动拉起整个 X + kiosk（这就是设备的"看门狗"）
-- **Chromium 重启后 Grafana 面板需 2-4 分钟才渲染完成**（软栅格化），属正常现象，勿误判为故障反复重启
-- 待专项：ANGLE EGL 初始化失败修复（恢复 Chromium 硬件加速），预期收益：Grafana 渲染提速、CPU 占用下降
+- **Chromium 重启后面板冷缓存需 2-4 分钟渲染完成**（SwiftShader 软栅格化），热缓存 ~35 秒；属正常现象，勿误判为故障反复重启
+- **勿再加 `--enable-gpu --use-angle=gles`（尤其配 --disable-gpu-sandbox）**：会触发 msm_dri 22 分钟假成功循环，页面 23 分钟才出来且 GPU 用量为 0
+- ANGLE 硬件加速已判死（见上文失败矩阵）；除非未来 ① Mesa 升级修复 freedreno EGL 循环 ② tu5xx 落地 + Chromium Vulkan 路径，否则软渲染即终态
 
 ---
 
