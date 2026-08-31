@@ -205,6 +205,13 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **遗留修复（桩）**：初版 vkenum 手工拼的 `VkPhysicalDeviceProperties` 少了 `sType`/`pNext`，字段错位且真实结构体（含数千字节 `VkPhysicalDeviceLimits`）写入越过小缓冲 → 堆/栈破坏 → 收尾 `free` 崩（gdb 实证 `SIGSEGV @ __GI___libc_free`）。**已改为直接 include Mesa `include/vulkan/vulkan.h` 真实头 + 标准签名 + dlopen 方式编译**，实测 `vkenum clean exit` 无崩溃，字段全部正确。**下一步可在此桩上扩展 `vkGetPhysicalDeviceFeatures`/`vkEnumerateDeviceExtensionProperties`/`vkCreateDevice`**，或直接搭建 tu5xx 命令流后端。
 - M1.1 里程碑验收 = **vkenum 能列出 A506 物理设备**，已达标。
 
+### M1.1 产出二：逻辑设备创建打通（2026-08-31）
+- vkenum 桩扩展（仍用真实 vulkan.h + dlopen）：枚举设备扩展、Features、队列族、`vkCreateDevice`+`vkDestroyDevice`。
+- 实测 A506：**111 个设备扩展**（KHR_bind_memory2 / buffer_device_address / create_renderpass2 / dedicated_allocation / depth_stencil_resolve / draw_indirect_count / driver_properties 等）、Features 报告正常（geometryShader/tessellationShader/independentBlend=1；float64/wideLines/sparseBinding=0）、**1 个队列族（graphics+compute+transfer）**。
+- **`vkCreateDevice` => VK_SUCCESS，`vkDestroyDevice` 完整走通，无崩溃** —— Turnip 设备初始化链（内核队列绑定/内存类型/cs 工具链）在 a5xx 分支下全部可用。
+- 注：Features/扩展清单仍出自 a6xx 硬编码模板（零初始化 a5xx 子结构使部分位默认 0），真实能力需在 M1.2 命令流落地后逐项校准。
+- M1.2 = tu5xx 命令流后端（vkQueueSubmit 空提交/围栏先行，对照 fd5 gallium 寄存器写法）。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）
