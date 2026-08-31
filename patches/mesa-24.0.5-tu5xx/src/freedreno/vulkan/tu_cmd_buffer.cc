@@ -298,8 +298,13 @@ tu_emit_cache_flush_ccu(struct tu_cmd_buffer *cmd_buffer,
    tu6_emit_flushes<CHIP>(cmd_buffer, cs, &cmd_buffer->state.cache);
 
    if (ccu_state != cmd_buffer->state.ccu_state) {
-      tu_cs_emit_regs(cs, rb_ccu_cntl<CHIP>(cmd_buffer->device,
-                                            ccu_state == TU_CMD_CCU_GMEM));
+      /* tu5xx: a5xx 无 CCU/RB_CCU_CNTL。不能发空 reg 对——tu_cs_emit_regs
+       * 会先按 ARRAY_SIZE 发 pkt4 包头（reg=0），再跳过值写入，产生一个
+       * 悬空包头，CP 把下一个包头当数据吃掉，造成命令流失步
+       * （表现为 CP | opcode error + protected mode error）。 */
+      if (CHIP != A5XX)
+         tu_cs_emit_regs(cs, rb_ccu_cntl<CHIP>(cmd_buffer->device,
+                                               ccu_state == TU_CMD_CCU_GMEM));
       cmd_buffer->state.ccu_state = ccu_state;
    }
 }
