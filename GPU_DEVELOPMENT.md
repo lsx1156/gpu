@@ -26,7 +26,7 @@
 | 内核侧 | `msm` / `kgsl` DRM 驱动 | 正常，`/dev/dri` 节点正常 |
 | OpenGL / EGL（原生 GLES） | **Mesa Freedreno 驱动（fdversion FD506）** | **完全可用**，`glmark2` 实测 **200+ FPS** |
 | 2D 加速 | XRender / EXA | 硬件加速支持 |
-| Vulkan | Mesa Turnip 驱动 | **不支持 Adreno 506，别抱希望** |
+| Vulkan | Mesa Turnip 驱动 | **不支持 Adreno 506（2026-08-31 已实测：`tu_device.cc:651 device Turnip Adreno 506 unsupported`）** |
 | Chromium 渲染 | **GPU 硬件合成**（ANGLE-GLES → Mesa freedreno FD506） | 2026-08-31 修复：加 `--disable-gpu-watchdog` 后 GPU 进程稳定 |
 
 **核心结论：原生 EGL/GLES 链路（Freedreno）是这张卡唯一可靠的硬件加速路径。**
@@ -164,6 +164,18 @@ exec /usr/bin/chromium --kiosk --noerrdialogs --lang=zh-CN --disable-translate \
 - **CPU governor `performance` → `schedutil`**（最佳性能/功耗平衡；`performance` 恒满频，对持续 kiosk 的电池终端耗电升温）。
 - 运行态已应用 4 核全 schedutil；持久化走 systemd 服务 `cpu-governor.service`（oneshot，`WantedBy=multi-user.target`，已 enable+active，重启自动生效）。
 - 提醒：改系统库/写 /etc 下的持久化文件，**别在本会话用 plink 传 heredoc**（CRLF 会破坏正文，曾制造 0 字节 masked 服务）；统一改为**本地写文件 → pscp 推送 → 远端直跑小脚本**。
+
+### Vulkan 实证探针（vulkan 尝试，2026-08-31）
+
+用 dlopen 版最小枚举器 `work/vkenum.c`（交叉编译，无 Vulkan 头依赖）实测：
+
+| ICD | 结果 |
+|---|---|
+| `freedreno_icd.aarch64.json`（**Turnip** HW Vulkan） | `vkCreateInstance` SUCCESS，但 **`tu_device.cc:651: device Turnip Adreno (TM) 506 is unsupported (VK_ERROR_INITIALIZATION_FAILED)`** → 物理设备枚举为 **0**，**硬件级不支持** |
+| `lvp_icd.aarch64.json`（llvmpipe 软件 Vulkan） | **Segmentation fault / core dump**（此设备上软件 Vulkan 也崩） |
+| 默认全部 ICD | turnip 报错 + 枚举 0 设备 |
+
+**定论：本机 Vulkan 两层均不可用** —— 无硬件 Vulkan（Turnip 拒绝 a5xx/A506），软件 Vulkan（lvp）亦崩溃。GLES/EGL 仍是唯一可用加速路径。
 
 ---
 
