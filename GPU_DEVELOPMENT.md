@@ -234,6 +234,14 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **下一步**：非空命令缓冲录制/提交（`vkBeginCommandBuffer` 会触发 `TU_CALLX(tu6_init_hw)` 的 A5XX 分支 + IB1 非空解析），然后逐步对照 fd5 gallium 补寄存器包。
 - **源码归档约定**：`work/` 在 .gitignore 内（mesa 源码树不入库），tu5xx 的全部 mesa 侧改动以**整文件快照**镜像到 `patches/mesa-24.0.5-tu5xx/`（保持相对路径，覆盖回源码树即还原），随 git 提交归档。当前改动 = 6 个文件：`tu_common.h`、`tu_device.cc`、`vulkan/meson.build`、`freedreno_gpu_event.h`、`tu_cmd_buffer.cc`、`gen_header.py`。
 
+### M1.2 产出二：非空命令缓冲录制/提交打通（2026-08-31）
+
+- vkenum 桩再扩展（M1.2.1 探针）：`vkCreateCommandPool` → `vkAllocateCommandBuffers`(primary×1) → `vkBeginCommandBuffer` → `vkEndCommandBuffer` → `vkQueueSubmit`(1 cb) → `vkWaitForFences`。
+- 实测 A506 全绿：**Begin/End VK_SUCCESS、非空提交 VK_SUCCESS、围栏 OK、clean exit，无 GPU hang**。
+- **意义**：`vkBeginCommandBuffer` 触发的 `TU_CALLX(tu6_init_hw)` A5XX 分支（最小 WFI 实现）与 IB1 非空解析路径在真机上验证通过——tu5xx 命令流骨架（模板 variant 分发 + tu_cs + suballoc + msm submitqueue）至此**端到端全通**。此后工作 = 按渲染管线逐段补 a5xx 寄存器包（对照 fd5 gallium）：init_hw 寄存器初始化 → renderpass/GMEM → 管线状态 → 真实 draw。
+- dmesg 复核：仅 MDP5 显示控制器历史报错（时间戳早于测试，X 会话既有问题），**MSM GPU 提交无任何新错误**。
+- vkenum.c 用 `git add -f` 强制入库（`work/` 忽略规则的例外），探针工具随版本走。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）
