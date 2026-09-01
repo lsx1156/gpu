@@ -113,9 +113,7 @@ def filter_regs(stream):
     last = {}
     for idx, e in enumerate(stream):
         if e[0] == "w":
-            nm = regname(e[1])
-            if any(nm.startswith(k) or ("VPC" in nm or "SP_" in nm or "VFD" in nm or "HLSQ" in nm) for k in KEYS):
-                last[e[1]] = (nm, e[2])
+            last[e[1]] = (regname(e[1]), e[2])
     return last
 
 def main():
