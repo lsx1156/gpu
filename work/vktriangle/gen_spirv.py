@@ -68,8 +68,10 @@ def build_vs():
     s.inst(0x0003, [1, 450])             # OpSource GLSL 450
     s.inst(0x0047, [gl_pos, 11, 0])      # OpDecorate gl_Position BuiltIn(Position)
     s.inst(0x0047, [in_pos, 30, 0])      # OpDecorate in_pos Location(0)
-    s.inst(0x0047, [in_col, 30, 1])      # OpDecorate in_col Location(1)
-    s.inst(0x0047, [out_col, 30, 1])     # OpDecorate out_col Location(1)
+    # H2B 选项3: varying 输出放 location 0 -> slot32(VAR0), 与 glsmooth 工作参照同构。
+    # 注意: 顶点输入 in_col 仍用 location 1(对应 VBO color 属性), 仅 varying 输出改 0。
+    s.inst(0x0047, [in_col, 30, 1])      # OpDecorate in_col Location(1) (顶点输入)
+    s.inst(0x0047, [out_col, 30, 0])     # OpDecorate out_col Location(0) (varying 输出)
 
     s.inst(0x0013, [t_void])             # OpTypeVoid
     s.inst(0x0021, [t_fn, t_void])       # OpTypeFunction
@@ -126,11 +128,9 @@ def build_fs():
     s.inst(0x000F, [4, main_id, b"main", out_col, in_col])
     s.inst(0x0010, [main_id, 7])         # OpExecutionMode OriginUpperLeft (=7)
     s.inst(0x0047, [out_col, 30, 0])     # OpDecorate out_col Location(0)
-    s.inst(0x0047, [in_col, 30, 1])      # OpDecorate in_col Location(1)
-    # 决定性实验(方案1): Flat 装饰(Decoration=14)。a5xx flat varying 走
-    # sldlv/lalv 直读 varying 存储, 绕过 barycentric。若 flat 读回非背景色 ->
-    # VPC 已投递数据, 问题在平滑插值链(ij/光栅器); 若仍全黑 -> VPC 未投递。
-    s.inst(0x0047, [in_col, 14])         # OpDecorate(0x47) in_col Flat(14)
+    # H2B 选项3: FS in_col 亦 location 0 -> slot32(VAR0) 平滑插值路径(bary.f),
+    # 与 glsmooth 工作参照同构。去掉 Flat 装饰 -> 走 bary.f 硬件插值。
+    s.inst(0x0047, [in_col, 30, 0])      # OpDecorate in_col Location(0)
 
     s.inst(0x0013, [t_void])
     s.inst(0x0021, [t_fn, t_void])

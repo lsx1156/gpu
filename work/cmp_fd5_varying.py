@@ -87,7 +87,7 @@ def dump_stream(path):
     return last
 
 fd = dump_stream(os.path.join(here, "fd5_kernel.rd"))
-tu = dump_stream(os.path.join(here, "vktriangle", "fresh_varying_00001.rd"))
+tu = dump_stream(os.path.join(here, "vktriangle", "fresh_cur_00001.rd"))
 
 # 兴趣寄存器: varying 递送链
 KEYS = [0x0e29d, 0x0e280, 0x0e294, 0x0e29a, 0x0e298, 0x0e285, 0x0e293,
