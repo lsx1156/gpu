@@ -242,16 +242,20 @@ int main(void)
           .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .pName = "main", .module = fs_mod },
     };
 
+    /* 多彩验证: 每个顶点携带 pos(vec3) + color(vec3), stride=6 float */
     VkVertexInputBindingDescription vib = {
-        .binding = 0, .stride = 3 * sizeof(float),
+        .binding = 0, .stride = 6 * sizeof(float),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
-    VkVertexInputAttributeDescription via = {
-        .location = 0, .binding = 0,
-        .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0 };
+    VkVertexInputAttributeDescription via[2] = {
+        { .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT,
+          .offset = 0 },
+        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT,
+          .offset = 3 * sizeof(float) },
+    };
     VkPipelineVertexInputStateCreateInfo vi = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1, .pVertexBindingDescriptions = &vib,
-        .vertexAttributeDescriptionCount = 1, .pVertexAttributeDescriptions = &via };
+        .vertexAttributeDescriptionCount = 2, .pVertexAttributeDescriptions = via };
 
     VkPipelineInputAssemblyStateCreateInfo ia = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -305,10 +309,11 @@ int main(void)
         "vkCreateGraphicsPipelines");
 
     /* ---- vertex buffer (host visible) ---- */
-    static const float verts[3][3] = {
-        {  0.0f, -0.8f, 0.0f },
-        { -0.8f,  0.8f, 0.0f },
-        {  0.8f,  0.8f, 0.0f },
+    /* 多彩验证: 3 顶点各带颜色 (R/G/B), 每顶点 = pos3 + color3 */
+    static const float verts[3][6] = {
+        {  0.0f, -0.8f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 下(顶)红 */
+        { -0.8f,  0.8f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 左上绿 */
+        {  0.8f,  0.8f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 右上蓝 */
     };
     VkBufferCreateInfo bci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -406,29 +411,43 @@ int main(void)
     printf("== vkQueueWaitIdle => %s (0x%x) ==\n",
            r == VK_SUCCESS ? "OK" : "ERR", (unsigned)r);
 
-    /* ---- M1.4: 像素读回验证 ---- */
+    /* ---- 多彩验证: 像素读回 ---- */
     CHK(vkMapMemory(dev, img_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(readback)");
     const uint8_t bg[4] = { 0, 0, 0, 255 };
-    const uint8_t exp[4] = { 0, 255, 0, 255 };  /* FS 输出绿色 */
-    uint32_t hit = 0, green = 0;
+    const uint8_t* px = (const uint8_t*)im + srl.offset; /* 取色辅助 */
+    /* screen(x,y) = map(ndc) -> (x,y,v[4]) */
+    struct { int x, y; } pro[3] = {
+        { 128, 189 }, /* 下(顶)红 ~ndc(0,-0.48) */
+        {  56,  46 }, /* 左上绿 ~ndc(-0.56,0.64) */
+        { 200,  46 }, /* 右上蓝 ~ndc(0.56,0.64) */
+    };
+    const char* pro_name[3] = { "red", "green", "blue" };
+    uint32_t hit = 0, ok = 1;
     for (uint32_t y = 0; y < H; y++) {
-        const uint8_t* row = (const uint8_t*)im + srl.offset + y * srl.rowPitch;
-        for (uint32_t x = 0; x < W; x++) {
-            const uint8_t* p = row + x * 4;
-            if (memcmp(p, bg, 4) != 0)
+        const uint8_t* row = px + y * srl.rowPitch;
+        for (uint32_t x = 0; x < W; x++)
+            if (memcmp(row + x * 4, bg, 4) != 0)
                 hit++;
-            if (memcmp(p, exp, 4) == 0)
-                green++;
-        }
     }
-    const uint8_t* c = (const uint8_t*)im + srl.offset + (H / 2) * srl.rowPitch + (W / 2) * 4;
-    printf("== readback: center(%u,%u) = RGBA(%u,%u,%u,%u)  nonbg=%u  green=%u ==\n",
-           W / 2, H / 2, c[0], c[1], c[2], c[3], hit, green);
-    /* 三角形顶点 (0,-0.8) (-0.8,0.8) (0.8,0.8)，NDC 中心在内部；
-     * 面积比 ~0.64*0.5 → 期望 green > 2 万像素 */
+    printf("== readback: nonbg=%u ==\n", hit);
+    /* 验证三个顶点附近各自主导对应 R/G/B 通道(平滑插值) */
+    for (int i = 0; i < 3; i++) {
+        const uint8_t* p = px + pro[i].y * srl.rowPitch + pro[i].x * 4;
+        uint8_t v[3] = { p[0], p[1], p[2] };           /* R,G,B (读回为直 RGBA) */
+        int dom = (v[1] > v[0] ? (v[2] > v[1] ? 2 : 1) : (v[2] > v[0] ? 2 : 0));
+        int want = (i == 0 ? 0 : (i == 1 ? 1 : 2));
+        int pass = (dom == want) && v[want] > 128;
+        printf("  probe %s@(%d,%d) = RGB(%u,%u,%u)  dom=%c  %s\n",
+               pro_name[i], pro[i].x, pro[i].y, v[0], v[1], v[2],
+               "RGB"[dom], pass ? "OK" : "MISMATCH");
+        if (!pass) ok = 0;
+    }
+    const uint8_t* c = px + (H / 2) * srl.rowPitch + (W / 2) * 4;
+    printf("== readback: center(%u,%u) = RGBA(%u,%u,%u,%u) ==\n",
+           W / 2, H / 2, c[0], c[1], c[2], c[3]);
     printf("== verify: %s ==\n",
-           (c[1] == 255 && c[0] == 0 && c[2] == 0 && c[3] == 255 && green > 20000)
-              ? "TRIANGLE RASTERIZED OK" : "FAIL (center not green or no coverage)");
+           (ok && hit > 20000) ? "MULTICOLOR RASTERIZED OK"
+                               : "FAIL (probe color mismatch or no coverage)");
     vkUnmapMemory(dev, img_mem);
 
     /* 隔离实验结果 */
