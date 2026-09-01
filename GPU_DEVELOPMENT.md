@@ -278,15 +278,21 @@ M1.3 只证明了 draw 命令执行无 fault，渲染目标读回全黑（0 像�
 - **意义**：tu5xx 第一个经像素级验证的真实光栅化输出（256×256 sysmem，绿色三角形顶点 -0.8,-0.8 / -0.8,0.8 / 0.8,0.8）。VS→VPC→光栅化→FS→RB→sysmem 写回全通路打通。
 - **遗留（下一里程碑候选）**：GMEM/binning 路径；颜色通道字节序（fd5 用 COLOR_SWAP=WZYX，tu5xx 暂 0，纯绿不受影响，多彩输出需核对）；`SP_FS_MRT[1..7]`/`RB_MRT[1..7]` 未用槽清零；FS 写 gl_FragDepth 的 DEPTH_REGID 接线。
 
-### M1.5 / H2：VS→FS 多彩 varying 递送调查（进行中，2026-09-01）
+### M1.5 / H2：VS→FS 多彩 varying 递送调查（进行中，2026-09-02 更新）
 
 M1.4 验证的是 FS 输出**常量绿色**。本阶段目标：让 VS 每顶点颜色经 varyings 平滑插值到 FS（多彩三角形），当前主要卡点。
 
 - **H2a（完成）**：寄存器级命令流对比结论——tu5xx 与 fd5 无缺失 varying 相关寄存器。`cmp_fd5_varying.py` diff 仅剩 MRT[1-7]/depth/blend/border/CS-const 上下文类（可控可解释）；VPC/SP 有效寄存器全部 fd5-identical。
 - **H2c（完成，inert）**：按 fd5 语义对齐 `VPC_SO_OVERRIDE=0`、`SP_FS_CTRL_REG0.VARYING`（`COND(total_in>0)`）、`VPC_VARYING_INTERP_MODE`（无 flat 时全 0 = smooth）——全部与 fd5 逐位一致，但 readback 仍无插值，确认这些位非根因（inert）。
-- **H2b（进行中）**：定位 FS varying 存储/递送基址。已做决定性分离实验：把 tu 测试 varying 改为与工作 GL 参照（`glsmooth.c`，bary.f 硬件插值）同构的 `location 0 → slot32(VAR0)` 平滑布局（`gen_spirv.py`）。
-- **当前实测结果（A506 真机，2026-09-01，commit f0da08f）**：三角形已能栅格化——`nonbg=15606`，`center(128,128)=RGBA(0,1,0,255)` 纯绿，fill buffer GPU 写回 OK，dmesg 0 行；**但三顶点 probe 全 MISMATCH**（red@(128,189)=RGB(0,123,0)、green@(56,46)=黑、blue@(200,46)=黑）→ varying 仍表现为**单一 flat 绿值**而非逐顶点插值。
-- **结论**：从全黑（M1.4 前）到能光栅化绿色覆盖是有进展的，但 VS→VPC→FS 的 per-vertex varying 递送在硬件上未按每顶点展开。下一步候选：① VPC_PACK/SP_PRIMITIVE_CNTL/VPC_CNTL_0 递送类寄存器 vs fd5 真机对称量验证；② bary.f 插值坐标基址/FS 本地存储偏移错位；③ 纯红 flat 三角形板上对照实验隔离「插值坐标错」vs「数据未递送」。
+- **H2b（进行中，2026-09-02 进展）**：
+  - **A路（寄存器对齐，完成）**：`VPC_VARYING_INTERP_MODE` 仅有 flat varying 时发射，SMOOTH=0 显式发射 0；对比 fd5 寄存器已对齐。
+  - **B路（纯红 flat 三角形对照实验，完成）**：100% 红色光栅化通过 —— 证明「光栅化+FS写色」链路完全正常，问题仅在 varying 插值路径。
+  - **VPC/SP 递送寄存器修正（完成）**：`SP_PRIMITIVE_CNTL.VSOUT` 排除 pos/psize/clip（2 vs 7）；`VPC_PACK.NUMNONPOSVAR` 用 `fs->total_in`（2 vs 3）；`VPC_CNTL_0.STRIDE_IN_VPC` 对齐 fd5。
+  - **SPIR-V 着色器修正（进行中）**：VS 输出 `location 0 vec2(xy)` varying，FS 输入 `location 0 vec2` —— 需修复 `OpCompositeExtract` 用法从 vec3 提取 xy。
+  - **根因已收敛**：IR3 仍用 `load_deref` 而非 `load_barycentric_pixel + load_interpolated_input`，说明 VS→FS varying slot 仍 mismatch，待 SPIR-V 修复后验证。
+- **当前实测结果（A506 真机，2026-09-02）**：纯红 flat 三角形 100% 通过；multicolor 仍表现为单一 flat 值（非插值），待 SPIR-V 修复后验证插值指令生成。
+
+---
 
 ---
 
