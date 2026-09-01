@@ -832,7 +832,8 @@ tu5_emit_vpc(struct tu_cs *cs,
    tu_cs_emit(cs, A5XX_VPC_PACK_NUMNONPOSVAR(fs ? fs->total_in : 0) |
                   A5XX_VPC_PACK_PSIZELOC(psize_loc));
 
-   /* varying 插值模式（fd5: flat → 2bit=FLAT，按分量 inloc 排布） */
+   /* varying 插值模式（fd5: flat → 2bit=FLAT，按分量 inloc 排布；无 flat varying 时完全不发射） */
+   uint32_t interp_regs = 0;
    if (fs) {
       uint32_t vinterp[8] = {0};
       for (int i = -1;
@@ -848,8 +849,17 @@ tu5_emit_vpc(struct tu_cs *cs,
             }
          }
       }
-      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_VARYING_INTERP_MODE(0), 8);
-      tu_cs_emit_array(cs, vinterp, 8);
+      /* 计算最高非零寄存器索引 */
+      for (int i = 7; i >= 0; i--) {
+         if (vinterp[i]) {
+            interp_regs = i + 1;
+            break;
+         }
+      }
+   }
+   if (interp_regs) {
+      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_VARYING_INTERP_MODE(0), interp_regs);
+      tu_cs_emit_array(cs, vinterp, interp_regs);
    }
 
    /* tu5xx: point-sprite 替换暂不支持，PS_REPL 全 0（fd5 无 sprite 时同样为 0） */

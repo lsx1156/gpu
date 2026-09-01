@@ -31,7 +31,7 @@ foreach ($c in 'crt1.o', 'Scrt1.o', 'crti.o', 'crtn.o', 'Mcrt1.o', 'ld-linux-aar
 
 if (-not $Out) { $Out = [IO.Path]::GetFileNameWithoutExtension($Src) }
 
-$argv = @("--sysroot=$S", "-isystem", $I, "-L", "$Root/slib")
+$argv = @("--sysroot=$S", "-isystem", $I, "-L", "$Root/slib", "-I", "$Root/work/mesa-src/mesa-24.0.5/include")
 if ($Cpp) {
     & "$Bin\aarch64-none-linux-gnu-g++.exe" @argv -static-libstdc++ $Src -o $Out @Rest
 } else {

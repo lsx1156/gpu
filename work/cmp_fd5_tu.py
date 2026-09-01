@@ -131,7 +131,7 @@ def regs_summary(stream):
     return last, first_pos
 
 fd = dump_stream(os.path.join(here, "fd5_kernel.rd"), "fd5")
-tu = dump_stream(os.path.join(here, "vktriangle", "run16_00001.rd"), "tu5xx")
+tu = dump_stream(os.path.join(here, "vktriangle", "fresh_cur_00001.rd"), "tu5xx")
 if fd is None or tu is None:
     sys.exit(1)
 
