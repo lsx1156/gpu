@@ -1,0 +1,25 @@
+决定性实验(方案1)结果留档: 给 FS in_col 加 Flat(Decoration=14) 后, readback 仍全黑 nonbg=0。
+
+FS ir3 反汇编(设备 /tmp/run_fs.log), 已改走 flat 直读(ldlv 直接加载 varying 存储),
+不再用 bary.f 平滑插值:
+    MESA: info: @in(r0.x)in0 (wrmask=0x3)
+    MESA: info: ldlv.u32 r0.x, l[0], 1
+    MESA: info: ldlv.u32 r0.y, l[1], 1
+    MESA: info: ldlv.u32 r0.z, l[2], 1
+    MESA: info: (ss)bary.f (ei)r63.x, 0, r0.x
+    MESA: info: end
+
+readback:
+    nonbg=0
+    probe red/green/blue 全 RGB(0,0,0) MISMATCH
+    center = RGBA(0,0,0,255)
+    fill buffer: GPU WRITE OK (0xaabbccdd)   <- GPU 其它通路正常
+    vktriangle clean exit, dmesg 0 行
+
+结论:
+  - flat 直读 varying 存储(l/ldlv) 仍读到 0 -> 排除 "光栅器 ij=0/平滑插值" 假设
+  - 根因在 varying 存储读取链: 要么 VPC 未把 VS 输出的 color varying 写进 FS
+    可读的 varying 存储, 要么 FS 读取的 varying 基地址(l[0] / SP 本地基址)为 0 或错误。
+  -> 下一步: 对比 fd5(a5xx gallium, 工作)的 SP_FS 输入/varying 存储配置, 补 tu5xx 缺失项。
+
+注: 之前误用过 SpvDecorationFlat=29, 正确值为 14 (spirv.h:497)。

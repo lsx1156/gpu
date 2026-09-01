@@ -127,6 +127,10 @@ def build_fs():
     s.inst(0x0010, [main_id, 7])         # OpExecutionMode OriginUpperLeft (=7)
     s.inst(0x0047, [out_col, 30, 0])     # OpDecorate out_col Location(0)
     s.inst(0x0047, [in_col, 30, 1])      # OpDecorate in_col Location(1)
+    # 决定性实验(方案1): Flat 装饰(Decoration=14)。a5xx flat varying 走
+    # sldlv/lalv 直读 varying 存储, 绕过 barycentric。若 flat 读回非背景色 ->
+    # VPC 已投递数据, 问题在平滑插值链(ij/光栅器); 若仍全黑 -> VPC 未投递。
+    s.inst(0x0047, [in_col, 14])         # OpDecorate(0x47) in_col Flat(14)
 
     s.inst(0x0013, [t_void])
     s.inst(0x0021, [t_fn, t_void])
