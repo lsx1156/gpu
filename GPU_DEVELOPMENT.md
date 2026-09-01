@@ -299,6 +299,23 @@ M1.4 验证的是 FS 输出**常量绿色**。本阶段目标：让 VS 每顶点
 | Vulkan | **tu5xx 自研路线**（M1.3/M1.4 已通） | A506 无官方 Turnip；自研 A5XX 后端 M1.4 已像素级验证三角形渲染 |
 | 2D 界面 | XRender / EXA 硬件加速可用 | Xorg + openbox 环境正常 |
 
+### 未来里程碑预期（tu5xx 路线图）
+
+tu5xx 驱动当前处于「能光栅化但 varying 插值未通」阶段。按依赖次序规划后续里程碑：
+
+| 里程碑 | 目标 | 验收标准 | 依赖 |
+|---|---|---|---|
+| **M1.6 / H2 闭环** | 打通 VS→VPC→FS per-vertex varying 递送 | 多彩三角形三顶点 probe R/G/B 全部 OK，平滑渐变 | 当前进行中（H2b） |
+| **M1.7** | 颜色字节序 & MRT 正确性 | 多彩三角形与预期颜色完全一致（含 alpha），GL/GLES 双验证 | M1.6 |
+| **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | M1.6（纹理基址/descriptor 递送） |
+| **M2.2** | GMEM/binning 路径 | 大屏渲染帧率与 sysmem 一致或更高，无 fault | M1.6 |
+| **M3.1** | 端到端真实应用（非测试桩） | 用 tu5xx 跑通一个实际交付级应用（如 SDL/Vulkan 简单 3D 场景或 UI） | M2.x |
+| **远期** | angle/GLES 互操作 & Chromium hw 合成 | 复用已验证 GL 通路，Chromium 硬件加速恢复 | M2.x |
+
+**预期风险与依赖项**：
+- varying 递送若最终证明是 VPC/固件不可治硬伤，则 M1.6 可能转向「FS 用 unconsumed vertex data / 纹理替代」绕行路径——列为后备预案，不阻塞图型化平台目标。
+- 所有里程碑都遵循「每次小改动 git 归档 → 解决/进展即 push GitHub 并更新说明」的工作约定。
+
 ### 综合开发检查清单
 
 - [x] 驱动已固定在 Mesa 24.0.5，勿升级、勿加 kisak PPA（26.1.7 残留已清理完毕 2026-08-31，ldd 证实三库无 libgallium 依赖）
