@@ -120,7 +120,7 @@ def filter_regs(stream):
 
 def main():
     a = dump_stream(os.path.join(base, "vktriangle", "run16_00001.rd"))
-    b = dump_stream(os.path.join(base, "vktriangle", "multicolor_00001.rd"))
+    b = dump_stream(os.path.join(base, "vktriangle", "fresh_varying_00001.rd"))
     ra = filter_regs(a)
     rb = filter_regs(b)
     print("=== 常量绿写、multicolor没写 (有varying后变0/未发) ===")
