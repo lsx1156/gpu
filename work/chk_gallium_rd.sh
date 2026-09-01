@@ -1,0 +1,3 @@
+#!/bin/sh
+echo 1234 | sudo -S sh -c 'echo "== msm_dri.so rd strings =="; strings /usr/lib/aarch64-linux-gnu/dri/msm_dri.so 2>/dev/null | grep -aiE "\.rd|rd_write|%\.5d|chip-id|tu-dump|cmdstream|xorg/" | head -20; echo "== dri dir =="; ls -la /usr/lib/aarch64-linux-gnu/dri/ 2>/dev/null; echo "== libgallium =="; ls -la /usr/lib/aarch64-linux-gnu/libgallium* 2>/dev/null; echo "== GL renderer =="; glxinfo 2>/dev/null | grep -iE "renderer|direct" | head'
+echo ===DONE===
