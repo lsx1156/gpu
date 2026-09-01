@@ -56,6 +56,10 @@
 - **M1.2**：A5XX 模板 variant 编入 turnip，内核提交链路验证。
 - **M1.3**：第一个 `vkCmdDraw` 三角形执行无 fault。
 - **M1.4**：三角形**像素读回验证通过**（`center=RGBA(0,255,0,255)`），得自自研 tu5xx 后端。
+- **M1.5 / H2（进行中）**：VS→FS 多彩 varying 插值递送调查
+  - H2a 完成：寄存器级对比无缺失
+  - H2c 完成：VPC/SP 关键位对齐 fd5，非根因
+  - H2b 进行中：A路寄存器对齐完成，B路纯红flat对照通过，VPC/SP递送寄存器修正完成，SPIR-V着色器修正进行中
 
 详细里程碑说明见 [`GPU_DEVELOPMENT.md`](GPU_DEVELOPMENT.md) 相应章节。
 
