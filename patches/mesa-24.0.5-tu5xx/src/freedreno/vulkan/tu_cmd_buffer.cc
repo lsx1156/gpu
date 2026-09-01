@@ -870,6 +870,14 @@ tu_cs_emit_draw_state(struct tu_cs *cs, uint32_t id, struct tu_draw_state state)
    /* tu5xx: 不再用 CP_SET_DRAW_STATE 组表（见 tu_cs_emit_draw_state 注释） */
    const bool is_a5xx = tu_cs_is_a5xx(cs);
 
+   /* tu5xx: a5xx 无 binning pass，且此处无条件内联所有状态组。若内联
+    * VS_BINNING/GS_BINNING（position-only 的 binning VS）会把 VFD_CONTROL_0
+    * 覆盖成 1（只取 pos），把 active VS 换成 position-only 变体，导致 color
+    * varying 全 0 / 黑屏。故 a5xx 直接跳过 binning 组。 */
+   if (is_a5xx && (id == TU_DRAW_STATE_VS_BINNING ||
+                   id == TU_DRAW_STATE_GS_BINNING))
+      return;
+
    if (is_a5xx) {
       /* tu5xx: a5xx 固件对 CP_SET_DRAW_STATE 组表/LOAD_IMMED 语义不可靠
        * （gid 越界 -> opcode error 0x480B7A01；gid=0 且无 enable mask ->
