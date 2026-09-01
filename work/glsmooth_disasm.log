@@ -1,0 +1,1311 @@
+[X11] win=0x1400001
+[X11] display init 1.5
+FRAG
+PROPERTY FS_COLOR0_WRITES_ALL_CBUFS 1
+DCL CONST[0]
+DCL OUT[0], COLOR
+  0: MOV OUT[0], CONST[0]
+  1: END
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: num_ubos: 1
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var uniform INTERP_MODE_NONE none vec4 uniform_0 (0, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0#0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     decl_var  INTERP_MODE_FLAT none vec4 out@out_0-temp
+MESA: info:     block b0:   // preds: 
+MESA: info:     32     %1 = load_const (0x00000000)
+MESA: info:     32     %6 = load_const (0x00000000 = 0.000000)
+MESA: info:     32     %7 = load_const (0x00000004)
+MESA: info:     32     %8 = ishl %1 (0x0), %7 (0x4)
+MESA: info:     32x4   %9 = @load_ubo (%6 (0x0), %8) (access=none, align_mul=1073741824, align_offset=0, range_base=0, range=16)
+MESA: info:     32x4   %3 = mov %9
+MESA: info:     32     %5 = deref_var &out@out_0-temp (function_temp vec4)
+MESA: info:                 @store_deref (%5, %3) (wrmask=xyzw, access=none)
+MESA: info:     32    %10 = deref_var &out_0 (shader_out vec4)
+MESA: info:     32    %11 = deref_var &out@out_0-temp (function_temp vec4)
+MESA: info:     32x4  %12 = @load_deref (%11) (access=none)
+MESA: info:                 @store_deref (%10, %12) (wrmask=xyzw, access=none)
+MESA: info:                 // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: num_ubos: 1
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var uniform INTERP_MODE_NONE none vec4 uniform_0 (0, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0#0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_ubo (%0 (0x0), %0 (0x0)) (access=none, align_mul=1073741824, align_offset=0, range_base=0, range=16)
+MESA: info:     32    %2 = deref_var &out_0 (shader_out vec4)
+MESA: info:                @store_deref (%2, %1) (wrmask=xyzw, access=none)
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+VERT
+DCL IN[0]
+DCL OUT[0], POSITION
+  0: MOV OUT[0], IN[0]
+  1: END
+MESA: info: dump nir1: type=4
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: num_ubos: 1
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     decl_var  INTERP_MODE_FLAT none vec4 in@in_0-temp
+MESA: info:     decl_var  INTERP_MODE_FLAT none vec4 out@out_0-temp
+MESA: info:     block b0:   // preds: 
+MESA: info:     32     %6 = deref_var &in@in_0-temp (function_temp vec4)
+MESA: info:     32     %7 = deref_var &in_0 (shader_in vec4)
+MESA: info:     32x4  %10 = @load_deref (%7) (access=none)
+MESA: info:                 @store_deref (%6, %10) (wrmask=xyzw, access=none)
+MESA: info:     32     %1 = deref_var &in@in_0-temp (function_temp vec4)
+MESA: info:     32x4   %2 = @load_deref (%1) (access=none)
+MESA: info:     32x4   %3 = mov %2
+MESA: info:     32     %5 = deref_var &out@out_0-temp (function_temp vec4)
+MESA: info:                 @store_deref (%5, %3) (wrmask=xyzw, access=none)
+MESA: info:     32     %8 = deref_var &out_0 (shader_out vec4)
+MESA: info:     32     %9 = deref_var &out@out_0-temp (function_temp vec4)
+MESA: info:     32x4  %11 = @load_deref (%9) (access=none)
+MESA: info:                 @store_deref (%8, %11) (wrmask=xyzw, access=none)
+MESA: info:                 // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_ubo (%0 (0x0), %0 (0x0)) (access=none, align_mul=1073741824, align_offset=0, range_base=0, range=16)
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: num_ubos: 1
+MESA: info: outputs_written: 2
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = deref_var &in_0 (shader_in vec4)
+MESA: info:     32x4  %1 = @load_deref (%0) (access=none)
+MESA: info:     32    %2 = deref_var &out_0 (shader_out vec4)
+MESA: info:                @store_deref (%2, %1) (wrmask=xyzw, access=none)
+MESA: info:                // succs: b1 
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_ubo (%0 (0x0), %0 (0x0)) (access=none, align_mul=1073741824, align_offset=0, range_base=0, range=16)
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_uniform (%0 (0x0)) (base=0, range=0, dest_type=invalid)
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: NIR (final form) for FRAG shader TTN:
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 0
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: origin_upper_left: true
+MESA: info: untyped_color_outputs: true
+MESA: info: inputs: 0
+MESA: info: outputs: 1
+MESA: info: uniforms: 1
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_var ubo INTERP_MODE_NONE none vec4[1] uniform_0 (0, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_uniform (%0 (0x0)) (base=0, range=0, dest_type=invalid)
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: Native code for unnamed FRAG shader TTN with sha1 9ba1669627bf1319928bb283e9bb1ef4496088dc:
+MESA: info: SIMD0
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      1
+MESA: info: ;   range[0]:
+MESA: info: ;     block:          0
+MESA: info: ;     offset:         c0.x
+MESA: info: ;     size:           4 vec4 (0b -> 64b)
+MESA: info: mov.u32u32 r0.x, c0.x
+MESA: info: mov.u32u32 r0.y, c0.y
+MESA: info: mov.u32u32 r0.z, c0.z
+MESA: info: mov.u32u32 r0.w, c0.w
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; FRAG: outputs: r0.x (FRAG_RESULT_COLOR)
+MESA: info: ; FRAG: inputs: r63.x (SYSTEM_VALUE_BARYCENTRIC_PERSP_PIXEL slot=53 cm=3,il=0,b=0)
+MESA: info: ; FRAG prog 1/1: 5 instr, 0 nops, 5 non-nops, 4 mov, 0 cov, 32 dwords
+MESA: info: ; FRAG prog 1/1: 0 last-baryf, 0 last-helper, 0 half, 1 full, 4 constlen
+MESA: info: ; FRAG prog 1/1: 1 cat0, 4 cat1, 0 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; FRAG prog 1/1: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; color: r0.x
+MESA: info: 
+MESA: info: dump nir2: type=0
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: NIR (final form) for VERT shader TTN:
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: Native code for unnamed VERT shader TTN with sha1 fc642ddb2e23c72482fa9b890816653b77ec0f6a:
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ;   primitive_params: c0.x
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      0
+MESA: info: @in(r0.x)	in0 (wrmask=0xf)
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; VERT: outputs: r0.x (VARYING_SLOT_POS)
+MESA: info: ; VERT: inputs: r0.x (VERT_ATTRIB_GENERIC0 slot=15 cm=f,il=0,b=0)
+MESA: info: ; VERT prog 2/1: 1 instr, 0 nops, 1 non-nops, 0 mov, 0 cov, 32 dwords
+MESA: info: ; VERT prog 2/1: 0 last-baryf, 0 last-helper, 0 half, 1 full, 0 constlen
+MESA: info: ; VERT prog 2/1: 1 cat0, 0 cat1, 0 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; VERT prog 2/1: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; pos: r0.x
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: NIR (final form) for BVERT shader TTN:
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000}
+MESA: info: name: TTN
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 0
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0
+MESA: info: subgroup_size: 1
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: separate_shader: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_FLAT none vec4 in_0 (VERT_ATTRIB_GENERIC0.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_FLAT none vec4 out_0 (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000)
+MESA: info:     32x4  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // in_0
+MESA: info:                @store_output (%1, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // out_0
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: Native code for unnamed BVERT shader TTN with sha1 fc642ddb2e23c72482fa9b890816653b77ec0f6a:
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ;   primitive_params: c0.x
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      0
+MESA: info: @in(r0.x)	in0 (wrmask=0xf)
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; BVERT: outputs: r0.x (VARYING_SLOT_POS)
+MESA: info: ; BVERT: inputs: r0.x (VERT_ATTRIB_GENERIC0 slot=15 cm=f,il=0,b=0)
+MESA: info: ; BVERT prog 2/2: 1 instr, 0 nops, 1 non-nops, 0 mov, 0 cov, 32 dwords
+MESA: info: ; BVERT prog 2/2: 0 last-baryf, 0 last-helper, 0 half, 1 full, 0 constlen
+MESA: info: ; BVERT prog 2/2: 1 cat0, 0 cat1, 0 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; BVERT prog 2/2: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; pos: r0.x
+MESA: info: 
+MESA: warning: Failed to set BO metadata with DRM_MSM_GEM_INFO: -22
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     decl_var  INTERP_MODE_NONE none highp vec2 in@aPos-temp
+MESA: info:     decl_var  INTERP_MODE_NONE none highp vec4 out@gl_Position-temp
+MESA: info:     decl_var  INTERP_MODE_NONE none mediump float out@vColor-temp
+MESA: info:     decl_var  INTERP_MODE_NONE none mediump float out@vColor-temp#1
+MESA: info:     block b0:   // preds: 
+MESA: info:     32    %13 = deref_var &in@aPos-temp (function_temp vec2)
+MESA: info:     32    %14 = deref_var &aPos (shader_in vec2)
+MESA: info:     32x2  %21 = @load_deref (%14) (access=none)
+MESA: info:                 @store_deref (%13, %21) (wrmask=xy, access=none)
+MESA: info:     32     %0 = deref_var &in@aPos-temp (function_temp vec2)
+MESA: info:     32x2   %1 = @load_deref (%0) (access=none)
+MESA: info:     32     %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32     %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32     %4 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x4   %5 = vec4 %1.x, %1.y, %4 (0x0), %2 (0x3f800000)
+MESA: info:     32     %6 = fadd %1.x, %2 (1.000000)
+MESA: info:     32     %7 = fmul %6, %3 (0.500000)
+MESA: info:     32     %8 = fadd %1.y, %2 (1.000000)
+MESA: info:     32     %9 = fmul %8, %3 (0.500000)
+MESA: info:     32    %10 = deref_var &out@gl_Position-temp (function_temp vec4)
+MESA: info:                 @store_deref (%10, %5) (wrmask=xyzw, access=none)
+MESA: info:     32    %11 = deref_var &out@vColor-temp (function_temp float)
+MESA: info:                 @store_deref (%11, %7) (wrmask=x, access=none)
+MESA: info:     32    %12 = deref_var &out@vColor-temp#1 (function_temp float)
+MESA: info:                 @store_deref (%12, %9) (wrmask=x, access=none)
+MESA: info:     32    %15 = deref_var &gl_Position (shader_out vec4)
+MESA: info:     32    %16 = deref_var &out@gl_Position-temp (function_temp vec4)
+MESA: info:     32x4  %22 = @load_deref (%16) (access=none)
+MESA: info:                 @store_deref (%15, %22) (wrmask=xyzw, access=none)
+MESA: info:     32    %17 = deref_var &vColor (shader_out float)
+MESA: info:     32    %18 = deref_var &out@vColor-temp (function_temp float)
+MESA: info:     32    %23 = @load_deref (%18) (access=none)
+MESA: info:                 @store_deref (%17, %23) (wrmask=x, access=none)
+MESA: info:     32    %19 = deref_var &vColor#0 (shader_out float)
+MESA: info:     32    %20 = deref_var &out@vColor-temp#1 (function_temp float)
+MESA: info:     32    %24 = @load_deref (%20) (access=none)
+MESA: info:                 @store_deref (%19, %24) (wrmask=x, access=none)
+MESA: info:                 // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:   // preds: 
+MESA: info:     32     %0 = deref_var &aPos (shader_in vec2)
+MESA: info:     32x2   %1 = @load_deref (%0) (access=none)
+MESA: info:     32     %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32     %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32     %4 = load_const (0x00000000 = 0.000000)
+MESA: info:     32     %5 = fadd %1.x, %2 (1.000000)
+MESA: info:     32     %6 = fmul %5, %3 (0.500000)
+MESA: info:     32     %7 = fadd %1.y, %2 (1.000000)
+MESA: info:     32     %8 = fmul %7, %3 (0.500000)
+MESA: info:     32     %9 = deref_var &gl_Position (shader_out vec4)
+MESA: info:     32x4  %10 = vec4 %1.x, %1.y, %4 (0x0), %2 (0x3f800000)
+MESA: info:                 @store_deref (%9, %10) (wrmask=xyzw, access=none)
+MESA: info:     32    %11 = deref_var &vColor (shader_out float)
+MESA: info:                 @store_deref (%11, %6) (wrmask=x, access=none)
+MESA: info:     32    %12 = deref_var &vColor#0 (shader_out float)
+MESA: info:                 @store_deref (%12, %8) (wrmask=x, access=none)
+MESA: info:                 // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 32
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     decl_var  INTERP_MODE_NONE none mediump float in@vColor-temp
+MESA: info:     decl_var  INTERP_MODE_NONE none mediump float in@vColor-temp#1
+MESA: info:     decl_var  INTERP_MODE_NONE none mediump vec4 out@gl_FragColor-temp
+MESA: info:     block b0:   // preds: 
+MESA: info:     32     %8 = deref_var &in@vColor-temp (function_temp float)
+MESA: info:     32     %9 = deref_var &vColor (shader_in float)
+MESA: info:     32    %14 = @load_deref (%9) (access=none)
+MESA: info:                 @store_deref (%8, %14) (wrmask=x, access=none)
+MESA: info:     32    %10 = deref_var &in@vColor-temp#1 (function_temp float)
+MESA: info:     32    %11 = deref_var &vColor#0 (shader_in float)
+MESA: info:     32    %15 = @load_deref (%11) (access=none)
+MESA: info:                 @store_deref (%10, %15) (wrmask=x, access=none)
+MESA: info:     32     %0 = deref_var &in@vColor-temp (function_temp float)
+MESA: info:     32     %1 = @load_deref (%0) (access=none)
+MESA: info:     32     %2 = load_const (0x00000000 = 0.000000)
+MESA: info:     32     %3 = deref_var &in@vColor-temp#1 (function_temp float)
+MESA: info:     32     %4 = @load_deref (%3) (access=none)
+MESA: info:     32     %5 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32     %6 = deref_var &out@gl_FragColor-temp (function_temp vec4)
+MESA: info:     32x4   %7 = vec4 %1, %2 (0x0), %4, %5 (0x3f800000)
+MESA: info:                 @store_deref (%6, %7) (wrmask=xyzw, access=none)
+MESA: info:     32    %12 = deref_var &gl_FragColor (shader_out vec4)
+MESA: info:     32    %13 = deref_var &out@gl_FragColor-temp (function_temp vec4)
+MESA: info:     32x4  %16 = @load_deref (%13) (access=none)
+MESA: info:                 @store_deref (%12, %16) (wrmask=xyzw, access=none)
+MESA: info:                 // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 32
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = deref_var &vColor (shader_in float)
+MESA: info:     32    %1 = @load_deref (%0) (access=none)
+MESA: info:     32    %2 = deref_var &vColor#0 (shader_in float)
+MESA: info:     32    %3 = @load_deref (%2) (access=none)
+MESA: info:     32    %4 = load_const (0x00000000 = 0.000000)
+MESA: info:     32    %5 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %6 = deref_var &gl_FragColor (shader_out vec4)
+MESA: info:     32x4  %7 = vec4 %1, %4 (0x0), %3, %5 (0x3f800000)
+MESA: info:                @store_deref (%6, %7) (wrmask=xyzw, access=none)
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: dump nir3: type=0
+MESA: info: dump nir4: type=4
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 32
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: ----------------------
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_barycentric_pixel () (interp_mode=0)
+MESA: info:     32    %2 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=0, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %3 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=1, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %4 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32x4  %5 = vec4 %2, %0 (0x0), %3, %4 (0x3f800000)
+MESA: info:                @store_output (%5, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1 mediump, xfb(), xfb2())  // gl_FragColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: ----------------------
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info: inputs_read: 32
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_barycentric_pixel () (interp_mode=0)
+MESA: info:     32    %2 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=0, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %3 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=1, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info:     32    %4 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32x4  %5 = vec4 %2, %0 (0x0), %3, %4 (0x3f800000)
+MESA: info:                @store_output (%5, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1 mediump, xfb(), xfb2())  // gl_FragColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 32
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info:     32x2  %1 = @load_barycentric_pixel () (interp_mode=0)
+MESA: info:     32    %2 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=0, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %3 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=1, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %4 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32x4  %5 = vec4 %2, %0 (0x0), %3, %4 (0x3f800000)
+MESA: info:                @store_output (%5, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1 mediump, xfb(), xfb2())  // gl_FragColor
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: NIR (final form) for FRAG shader GLSL3:
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info: shader: MESA_SHADER_FRAGMENT
+MESA: info: source_sha1: {0x81cd69e9, 0x914fa93b, 0xe4f6ef58, 0x541c7a6c, 0x1d29d87c}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 4
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 32
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info: outputs_written: 2
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: NIR (final form) for VERT shader GLSL3:
+MESA: info: inputs: 1
+MESA: info: outputs: 1
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 0, 0)
+MESA: info: decl_var shader_in INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump vec4 gl_FragColor (FRAG_RESULT_COLOR.xyzw, 0, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_barycentric_pixel () (interp_mode=0)
+MESA: info:     32    %2 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=0, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %3 = @load_interpolated_input (%1, %0 (0x0)) (base=0, component=1, dest_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump)  // vColor
+MESA: info:     32    %4 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32x4  %5 = vec4 %2, %0 (0x0), %3, %4 (0x3f800000)
+MESA: info:                @store_output (%5, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=FRAG_RESULT_COLOR slots=1 mediump, xfb(), xfb2())  // gl_FragColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: Native code for unnamed FRAG shader GLSL3 with sha1 b90f62518cf61c7062a4c99ffa848fc7f1c7e8bc:
+MESA: info: SIMD0
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      0
+MESA: info: @in(r0.x)	in0 (wrmask=0x3)
+MESA: info: bary.f r0.z, 0, r0.x
+MESA: info: bary.f (ei)r1.x, 1, r0.x
+MESA: info: mov.u32u32 r0.w, 0
+MESA: info: mov.u32u32 r1.y, 0x3f800000
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; FRAG: outputs: r0.z (FRAG_RESULT_COLOR)
+MESA: info: ; FRAG: inputs: r0.z (VARYING_SLOT_VAR0 slot=32 cm=3,il=0,b=1) r0.x (SYSTEM_VALUE_BARYCENTRIC_PERSP_PIXEL slot=53 cm=3,il=2,b=0)
+MESA: info: ; FRAG prog 4/1: 5 instr, 0 nops, 5 non-nops, 2 mov, 0 cov, 32 dwords
+MESA: info: ; FRAG prog 4/1: 1 last-baryf, 0 last-helper, 0 half, 2 full, 0 constlen
+MESA: info: ; FRAG prog 4/1: 1 cat0, 2 cat1, 2 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; FRAG prog 4/1: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; pos (ij_pixel): r0.x
+MESA: info: ; color: r0.z
+MESA: info: 
+MESA: info: Native code for unnamed VERT shader GLSL3 with sha1 0253294841ecd5d1a64a8a71020eda1740ba2f50:
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ;   primitive_params: c0.x
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      0
+MESA: info: @in(r0.x)	in0 (wrmask=0x3)
+MESA: info: add.f r1.x, r0.x, (1.0)
+MESA: info: add.f r1.y, r0.y, (1.0)
+MESA: info: mov.u32u32 r0.z, 0
+MESA: info: mov.u32u32 r0.w, 0x3f800000
+MESA: info: mul.f r1.z, r1.x, (0.5)
+MESA: info: mul.f r1.w, r1.y, (0.5)
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; VERT: outputs: r0.x (VARYING_SLOT_POS) r1.z (VARYING_SLOT_VAR0)
+MESA: info: ; VERT: inputs: r0.x (VERT_ATTRIB_GENERIC0 slot=15 cm=3,il=0,b=0)
+MESA: info: ; VERT prog 3/1: 7 instr, 0 nops, 7 non-nops, 2 mov, 0 cov, 32 dwords
+MESA: info: ; VERT prog 3/1: 0 last-baryf, 0 last-helper, 0 half, 2 full, 0 constlen
+MESA: info: ; VERT prog 3/1: 1 cat0, 2 cat1, 4 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; VERT prog 3/1: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; pos: r0.x
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: ----------------------
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: ----------------------
+MESA: info: NIR (final form) for BVERT shader GLSL3:
+MESA: info: shader: MESA_SHADER_VERTEX
+MESA: info: source_sha1: {0xd1d58e3e, 0xc39a796d, 0x1711ef70, 0xbba171ee, 0xdcde0cb8}
+MESA: info: name: GLSL3
+MESA: info: internal: false
+MESA: info: stage: 0
+MESA: info: next_stage: 4
+MESA: info: inputs_read: 15
+MESA: info: outputs_written: 0,32
+MESA: info: subgroup_size: 1
+MESA: info: bit_sizes_float: 0x20
+MESA: info: bit_sizes_int: 0x20
+MESA: info: first_ubo_is_default_ubo: true
+MESA: info: flrp_lowered: true
+MESA: info: inputs: 1
+MESA: info: outputs: 2
+MESA: info: uniforms: 0
+MESA: info: decl_var shader_in INTERP_MODE_NONE none highp vec2 aPos (VERT_ATTRIB_GENERIC0.xy, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none highp vec4 gl_Position (VARYING_SLOT_POS.xyzw, 0, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor (VARYING_SLOT_VAR0.x, 1, 0)
+MESA: info: decl_var shader_out INTERP_MODE_NONE none mediump float vColor#0 (VARYING_SLOT_VAR0.y, 1, 0)
+MESA: info: decl_function main (0 params)
+MESA: info: 
+MESA: info: impl main {
+MESA: info:     block b0:  // preds: 
+MESA: info:     32    %0 = load_const (0x00000000 = 0.000000)
+MESA: info:     32x2  %1 = @load_input (%0 (0x0)) (base=0, range=1, component=0, dest_type=float32, io location=VERT_ATTRIB_GENERIC0 slots=1)  // aPos
+MESA: info:     32    %2 = load_const (0x3f800000 = 1.000000)
+MESA: info:     32    %3 = load_const (0x3f000000 = 0.500000)
+MESA: info:     32    %4 = fadd %1.x, %2 (1.000000)
+MESA: info:     32    %5 = fmul %4, %3 (0.500000)
+MESA: info:     32    %6 = fadd %1.y, %2 (1.000000)
+MESA: info:     32    %7 = fmul %6, %3 (0.500000)
+MESA: info:     32x4  %8 = vec4 %1.x, %1.y, %0 (0x0), %2 (0x3f800000)
+MESA: info:                @store_output (%8, %0 (0x0)) (base=0, range=1, wrmask=xyzw, component=0, src_type=float32, io location=VARYING_SLOT_POS slots=1, xfb(), xfb2())  // gl_Position
+MESA: info:                @store_output (%5, %0 (0x0)) (base=1, range=1, wrmask=x, component=0, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                @store_output (%7, %0 (0x0)) (base=1, range=1, wrmask=x, component=1, src_type=float32, io location=VARYING_SLOT_VAR0 slots=1 mediump, xfb(), xfb2())  // vColor
+MESA: info:                // succs: b1 
+MESA: info:     block b1:
+MESA: info: }
+MESA: info: 
+MESA: info: Native code for unnamed BVERT shader GLSL3 with sha1 1bd890dca7cfefa83ae1dd74d36dddb608331fb0:
+MESA: info: ; num_ubos:           0
+MESA: info: ; num_driver_params:  0
+MESA: info: ; offsets:
+MESA: info: ;   primitive_params: c0.x
+MESA: info: ; ubo_state:
+MESA: info: ;   num_enabled:      0
+MESA: info: @in(r0.x)	in0 (wrmask=0x3)
+MESA: info: mov.u32u32 r0.z, 0
+MESA: info: mov.u32u32 r0.w, 0x3f800000
+MESA: info: end
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: nop
+MESA: info: ; BVERT: outputs: r0.x (VARYING_SLOT_POS)
+MESA: info: ; BVERT: inputs: r0.x (VERT_ATTRIB_GENERIC0 slot=15 cm=3,il=0,b=0)
+MESA: info: ; BVERT prog 3/2: 3 instr, 0 nops, 3 non-nops, 2 mov, 0 cov, 32 dwords
+MESA: info: ; BVERT prog 3/2: 0 last-baryf, 0 last-helper, 0 half, 1 full, 0 constlen
+MESA: info: ; BVERT prog 3/2: 1 cat0, 2 cat1, 0 cat2, 0 cat3, 0 cat4, 0 cat5, 0 cat6, 0 cat7, 
+MESA: info: ; BVERT prog 3/2: 0 sstall, 0 (ss), 0 systall, 0 (sy), 0 loops
+MESA: info: ; pos: r0.x
+MESA: info: 
+[X11] ctx=ES3 surf=0x404ed800
+GL context OK
+link=0x1
+CENTER rgba=128,0,128,255 err=0x0
+GLSMOOTH_DONE
