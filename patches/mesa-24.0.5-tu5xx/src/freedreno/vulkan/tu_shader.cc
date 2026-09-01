@@ -1468,10 +1468,14 @@ tu6_emit_cs_config(struct tu_cs *cs,
       ir3_const_state(v)->push_consts_type == IR3_PUSH_CONSTS_SHARED;
    tu6_emit_shared_consts_enable<CHIP>(cs, shared_consts_enable);
 
-   tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
-         .cs_state = true,
-         .cs_ibo = true,
-         .cs_shared_const = shared_consts_enable));
+   /* tu5xx: a5xx 无 HLSQ_INVALIDATE_CMD variant（空对 → pkt4(reg=0)
+    * 非法包头），跳过 */
+   if (CHIP != A5XX) {
+      tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
+            .cs_state = true,
+            .cs_ibo = true,
+            .cs_shared_const = shared_consts_enable));
+   }
 
    tu6_emit_xs_config<CHIP>(cs, MESA_SHADER_COMPUTE, v);
    tu6_emit_xs(cs, MESA_SHADER_COMPUTE, v, pvtmem, binary_iova);

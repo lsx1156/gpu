@@ -264,6 +264,20 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - **意义**：A506 上第一个由自研 tu5xx 驱动完成的真实 GPU 绘制（sysmem 模式，renderpass + pipeline + draw + fence 全链路）。Vulkan 从"放弃"改为 tu5xx 自研路线可继续推进。
 - **归档**：patches 快照同步为 14 文件；驱动部署于设备 `~/tu5xx/libvulkan_freedreno.so`。
 
+### M1.4：三角形像素读回验证通过（2026-09-01）
+
+M1.3 只证明了 draw 命令执行无 fault，渲染目标读回全黑（0 像素写入）。本里程碑通过 **fd5 gallium 命令流逐寄存器对比**（`work/cmp_fd5_tu.py`，对比 fd5 `FD_MESA_DEBUG=rd` dump 与 tu5xx dump）定位并补齐 4 类缺失状态，最终读回验证通过。
+
+- **定位方法**：设备上抓 fd5 gallium 三角形渲染 RD dump（`work/fd5_kernel.rd`）作"标准答案"，`cmp_fd5_tu.py` 提取两侧最后写入值逐寄存器 diff（`work/cmp_fd5_tu.txt`）。MRT[0]/VFD/CONFIG 类差异多为 GMEM-vs-sysmem 与顶点格式差异，可解释；真正的缺口是以下 4 项。
+- **修的 4 个缺失**（零覆盖根因，均在 fd5_emit.c/fd5_gmem.c 有对应实现）：
+  1. **`GRAS_SC_VIEWPORT_SCISSOR_TL/BR_0`**（`tu6_emit_scissor<A5XX>`）：fd5 与 screen scissor 同值成对发射；tu5xx 漏发 → 复位默认 0x0 视口裁剪矩形为空，**所有像素被裁掉（零覆盖主因）**。
+  2. **`RB_FS_OUTPUT_CNTL`/`SP_FS_OUTPUT_CNTL`**（`tu6_emit_blend<A5XX>`）：MRT 数量告知 RB/SP 颜色输出路由（fd5_emit.c:706-715）；tu5xx 漏发 → FS 结果不写渲染目标。DEPTH/SAMPLEMASK_REGID 用 regid(63,0)（FS 不写 depth 时与 fd5 等价）。
+  3. **`RB_BLEND_CNTL` 补 `SAMPLE_MASK`**：fd5 恒带 `SAMPLE_MASK(sample_mask)`（默认 0xffff）；tu5xx 原值 0 可能掩掉所有采样点。
+  4. **`TPL1_TP_RAS/DEST_MSAA_CNTL`**（`tu6_emit_msaa<A5XX>`）：fd5_gmem.c emit_msaa 三对（TP/GRAS/RB）成组发射；tu5xx 原来只发 GRAS/RB 两对，TP 侧 MSAA 模式残留复位默认值。
+- **实测结果（2026-09-01，A506 真机）**：`run15.sh`（TU_DEBUG=sysmem,rd）连续两次 —— **readback center(128,128)=RGBA(0,255,0,255)，nonbg=20808=green=20808，"TRIANGLE RASTERIZED OK"；fill buffer GPU 写 0xaabbccdd OK；clean exit，dmesg 0 行**。
+- **意义**：tu5xx 第一个经像素级验证的真实光栅化输出（256×256 sysmem，绿色三角形顶点 -0.8,-0.8 / -0.8,0.8 / 0.8,0.8）。VS→VPC→光栅化→FS→RB→sysmem 写回全通路打通。
+- **遗留（下一里程碑候选）**：GMEM/binning 路径；颜色通道字节序（fd5 用 COLOR_SWAP=WZYX，tu5xx 暂 0，纯绿不受影响，多彩输出需核对）；`SP_FS_MRT[1..7]`/`RB_MRT[1..7]` 未用槽清零；FS 写 gl_FragDepth 的 DEPTH_REGID 接线。
+
 ---
 
 ## 五、开发路线建议（避免反复造轮子）
@@ -272,7 +286,7 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 |---|---|---|
 | 3D / GLES 原生加速 | **原生 EGL/GLES**（SDL2 + GLES2、Qt、或 WebKitGTK 硬件加速路径） | 这条链路已验证可用（glmark2 200+ FPS） |
 | 跑 Chromium / Web 界面 | 软件渲染 + GPU 光栅化尝试（现状）→ **待专项修复 ANGLE EGL** | 硬件合成黑屏已证伪勿试；ANGLE EGL 失败是当前最大优化点 |
-| Vulkan | **放弃** | Adreno 506 无 Turnip 支持 |
+| Vulkan | **tu5xx 自研路线**（M1.3/M1.4 已通） | A506 无官方 Turnip；自研 A5XX 后端 M1.4 已像素级验证三角形渲染 |
 | 2D 界面 | XRender / EXA 硬件加速可用 | Xorg + openbox 环境正常 |
 
 ### 综合开发检查清单
@@ -285,7 +299,7 @@ Turnip 从 tu6xx 起才支持 Adreno 6xx+，a5xx（含 A506）无 Vulkan 后端�
 - [ ] 会话/配置文件中禁止出现 `LIBGL_ALWAYS_SOFTWARE` / `GALLIUM_DRIVER=llvmpipe`（已清理，勿再加）
 - [ ] Web 缩放用 `zoom`，不用 `transform: scale()`（软渲染下合成层会黑屏；GPU 合成开启后此限制待复测）
 - [ ] 需要 GPU 加速的场景优先考虑原生 EGL/GLES，而非浏览器
-- [ ] Vulkan 相关需求直接排除
+- [x] Vulkan 需求走 tu5xx 自研路线（M1.4 像素读回已验证，2026-09-01；原"直接排除"结论作废）
 
 ---
 

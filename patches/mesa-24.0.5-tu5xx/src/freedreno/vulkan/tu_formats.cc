@@ -134,6 +134,82 @@ tu5_format_vtx(enum pipe_format format)
    };
 }
 
+/* tu5xx: a5xx 颜色格式表（fd5_format.c 的 RB5 部分子集）。
+ * BGRA/A8B8G8R8 等布局差异通过 swap 通道重排实现，与 fd5 一致。 */
+struct tu_native_format
+tu5_format_color(enum pipe_format format)
+{
+   enum a5xx_color_fmt fmt = RB5_NONE;
+   enum a3xx_color_swap swap = WZYX;
+
+   switch (format) {
+   /* 8-bit */
+   case PIPE_FORMAT_R8_UNORM:
+   case PIPE_FORMAT_R8_SRGB:
+      fmt = RB5_R8_UNORM;
+      break;
+   case PIPE_FORMAT_R8G8_UNORM:
+      fmt = RB5_R8G8_UNORM;
+      break;
+   /* 16-bit packed */
+   case PIPE_FORMAT_B5G6R5_UNORM:
+      fmt = RB5_R5G6B5_UNORM;
+      swap = WXYZ;
+      break;
+   case PIPE_FORMAT_B5G5R5A1_UNORM:
+      fmt = RB5_R5G5B5A1_UNORM;
+      swap = WXYZ;
+      break;
+   case PIPE_FORMAT_B4G4R4A4_UNORM:
+      fmt = RB5_R4G4B4A4_UNORM;
+      swap = WXYZ;
+      break;
+   /* 32-bit */
+   case PIPE_FORMAT_R8G8B8A8_UNORM:
+   case PIPE_FORMAT_R8G8B8A8_SRGB:
+      fmt = RB5_R8G8B8A8_UNORM;
+      break;
+   case PIPE_FORMAT_B8G8R8A8_UNORM:
+   case PIPE_FORMAT_B8G8R8A8_SRGB:
+      fmt = RB5_R8G8B8A8_UNORM;
+      swap = WXYZ;
+      break;
+   case PIPE_FORMAT_A8B8G8R8_UNORM:
+   case PIPE_FORMAT_A8B8G8R8_SRGB:
+      fmt = RB5_R8G8B8A8_UNORM;
+      swap = XYZW;
+      break;
+   case PIPE_FORMAT_R10G10B10A2_UNORM:
+      fmt = RB5_R10G10B10A2_UNORM;
+      break;
+   case PIPE_FORMAT_B10G10R10A2_UNORM:
+      fmt = RB5_R10G10B10A2_UNORM;
+      swap = WXYZ;
+      break;
+   /* 64-bit */
+   case PIPE_FORMAT_R16G16B16A16_FLOAT:
+      fmt = RB5_R16G16B16A16_FLOAT;
+      break;
+   /* 128-bit */
+   case PIPE_FORMAT_R32G32B32A32_FLOAT:
+      fmt = RB5_R32G32B32A32_FLOAT;
+      break;
+   case PIPE_FORMAT_R32G32B32A32_UINT:
+      fmt = RB5_R32G32B32A32_UINT;
+      break;
+   case PIPE_FORMAT_R32G32B32A32_SINT:
+      fmt = RB5_R32G32B32A32_SINT;
+      break;
+   default:
+      unreachable("tu5xx: unsupported color format");
+   }
+
+   return (struct tu_native_format) {
+      .fmt = (enum a6xx_format) fmt, /* 位宽与 a6xx_format 枚举不同，仅透传给 RB 寄存器 */
+      .swap = swap,
+   };
+}
+
 static bool
 tu6_format_color_supported(enum pipe_format format)
 {

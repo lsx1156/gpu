@@ -2523,7 +2523,8 @@ tu_emit_program_state(struct tu_cs *sub_cs,
 }
 
 static const enum mesa_vk_dynamic_graphics_state tu_vertex_input_state[] = {
-   MESA_VK_DYNAMIC_VI,
+   MESA_VK_DYNAMIC_VI_BINDINGS_VALID,
+   MESA_VK_DYNAMIC_VI_BINDING_STRIDES,
 };
 
 template <chip CHIP>
@@ -2533,8 +2534,12 @@ tu6_vertex_input_size(struct tu_device *dev,
                       const struct tu_cmd_buffer *cmd)
 {
    /* tu5xx: 每属性一组 VFD_FETCH(4) + VFD_DECODE(2)，pkt4 头各 1 dword */
-   if (CHIP == A5XX)
+   if (CHIP == A5XX) {
+      if (getenv("TU5XX_TRACE"))
+         fprintf(stderr, "[tu5xx-vi] size: attrs_valid=0x%x -> %u dwords\n",
+                 vi->attributes_valid, 8 * util_last_bit(vi->attributes_valid));
       return 8 * util_last_bit(vi->attributes_valid);
+   }
 
    (void) cmd;
    return 1 + 2 * util_last_bit(vi->attributes_valid);
@@ -2936,6 +2941,10 @@ template <chip CHIP>
 static unsigned
 tu6_scissor_size(struct tu_device *dev, const struct vk_viewport_state *vp)
 {
+   /* tu5xx: screen scissor（pkt4头+2）+ viewport scissor（pkt4头+2） */
+   if (CHIP == A5XX)
+      return 2 * (1 + vp->scissor_count * 2);
+
    return 1 + vp->scissor_count * 2;
 }
 
@@ -2970,6 +2979,14 @@ tu6_emit_scissor(struct tu_cs *cs, const struct vk_viewport_state *vp)
                      A5XX_GRAS_SC_SCREEN_SCISSOR_TL_0_Y(min_y));
       tu_cs_emit(cs, A5XX_GRAS_SC_SCREEN_SCISSOR_BR_0_X(max_x) |
                      A5XX_GRAS_SC_SCREEN_SCISSOR_BR_0_Y(max_y));
+
+      /* tu5xx: 视口裁剪（fd5_emit.c:618-623 与 screen scissor 同值成对发射，
+       * 不发射时复位默认 0x0 会把整个视口裁掉） */
+      tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_VIEWPORT_SCISSOR_TL_0, 2);
+      tu_cs_emit(cs, A5XX_GRAS_SC_VIEWPORT_SCISSOR_TL_0_X(min_x) |
+                     A5XX_GRAS_SC_VIEWPORT_SCISSOR_TL_0_Y(min_y));
+      tu_cs_emit(cs, A5XX_GRAS_SC_VIEWPORT_SCISSOR_TL_0_X(max_x) |
+                     A5XX_GRAS_SC_VIEWPORT_SCISSOR_TL_0_Y(max_y));
       return;
    }
 
@@ -3292,11 +3309,11 @@ tu6_blend_size(struct tu_device *dev,
                bool alpha_to_one_enable,
                uint32_t sample_mask)
 {
-   /* tu5xx: SP_BLEND_CNTL + RB_BLEND_CNTL + 2*MRT */
+   /* tu5xx: SP_BLEND_CNTL + RB_BLEND_CNTL + 2*MRT + RB/SP_FS_OUTPUT_CNTL */
    if (CHIP == A5XX) {
       unsigned num_rts = alpha_to_coverage_enable ?
          MAX2(cb->attachment_count, 1) : cb->attachment_count;
-      return 2 + 3 * num_rts;
+      return 4 + 3 * num_rts;
    }
 
    unsigned num_rts = alpha_to_coverage_enable ?
@@ -3374,8 +3391,21 @@ tu6_emit_blend(struct tu_cs *cs,
       tu_cs_emit_pkt4(cs, REG_A5XX_RB_BLEND_CNTL, 1);
       tu_cs_emit(cs,
                  A5XX_RB_BLEND_CNTL_ENABLE_BLEND(blend_enable_mask) |
+                 A5XX_RB_BLEND_CNTL_SAMPLE_MASK(sample_mask) |
                  COND(alpha_to_coverage_enable,
                       A5XX_RB_BLEND_CNTL_ALPHA_TO_COVERAGE));
+
+      /* tu5xx: RB_FS_OUTPUT_CNTL/SP_FS_OUTPUT_CNTL（fd5_emit.c:706-715）。
+       * MRT 数量告知 RB/SP 颜色输出路由，缺此 FS 结果不写渲染目标。
+       * DEPTH/SAMPLEMASK_REGID 用无效 regid（FS 不写 depth 时与 fd5 等价）；
+       * FRAG_WRITES_Z 仅 FS 写 gl_FragDepth 时需要，暂不支持。 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_FS_OUTPUT_CNTL, 1);
+      tu_cs_emit(cs, A5XX_RB_FS_OUTPUT_CNTL_MRT(num_rts));
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_FS_OUTPUT_CNTL, 1);
+      tu_cs_emit(cs, A5XX_SP_FS_OUTPUT_CNTL_MRT(num_rts) |
+                     A5XX_SP_FS_OUTPUT_CNTL_DEPTH_REGID(regid(63, 0)) |
+                     A5XX_SP_FS_OUTPUT_CNTL_SAMPLEMASK_REGID(regid(63, 0)));
       return;
    }
 
@@ -3580,17 +3610,34 @@ tu6_emit_rast(struct tu_cs *cs,
    tu_cs_emit_regs(cs,
                    A6XX_VPC_POLYGON_MODE(polygon_mode));
 
-   tu_cs_emit_regs(cs,
-                   PC_POLYGON_MODE(CHIP, polygon_mode));
+   if (CHIP == A5XX) {
+      /* tu5xx: PC_POLYGON_MODE/PC_RASTER_CNTL 为 a6xx 派发宏，a5xx 无对应
+       * variant（返回空对 → pkt4(reg=0) 非法包头，CP 失步）。改用
+       * REG_A5XX_PC_RASTER_CNTL（fd5_rasterizer.c 语义：非 FILL 才置
+       * POLYMODE_ENABLE）。 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_PC_RASTER_CNTL, 1);
+      tu_cs_emit(cs,
+                 A5XX_PC_RASTER_CNTL_POLYMODE_FRONT_PTYPE(
+                    (enum adreno_pa_su_sc_draw) polygon_mode) |
+                 A5XX_PC_RASTER_CNTL_POLYMODE_BACK_PTYPE(
+                    (enum adreno_pa_su_sc_draw) polygon_mode) |
+                 COND(polygon_mode != POLYMODE6_TRIANGLES,
+                      A5XX_PC_RASTER_CNTL_POLYMODE_ENABLE));
+   } else {
+      tu_cs_emit_regs(cs,
+                      PC_POLYGON_MODE(CHIP, polygon_mode));
+   }
 
    if (CHIP == A7XX) {
       tu_cs_emit_regs(cs,
                      A7XX_VPC_POLYGON_MODE2(polygon_mode));
    }
 
-   tu_cs_emit_regs(cs, PC_RASTER_CNTL(CHIP,
-      .stream = rs->rasterization_stream,
-      .discard = rs->rasterizer_discard_enable));
+   if (CHIP != A5XX) {
+      tu_cs_emit_regs(cs, PC_RASTER_CNTL(CHIP,
+         .stream = rs->rasterization_stream,
+         .discard = rs->rasterizer_discard_enable));
+   }
    if (CHIP == A6XX) {
       tu_cs_emit_regs(cs, A6XX_VPC_UNKNOWN_9107(
          .raster_discard = rs->rasterizer_discard_enable));
@@ -4013,8 +4060,19 @@ tu_emit_draw_state(struct tu_cmd_buffer *cmd)
    }
 #define DRAW_STATE(name, id, ...) DRAW_STATE_COND(name, id, false, __VA_ARGS__)
 
-   DRAW_STATE(vertex_input, TU_DYNAMIC_STATE_VERTEX_INPUT,
-              cmd->vk.dynamic_graphics_state.vi, cmd);
+   /* tu5xx: 管线绑定拷贝静态 VI 时只 dirty MESA_VK_DYNAMIC_VI（vk_graphics_state.c
+    * COPY_MEMBER(VI, ...)），而 tu_vertex_input_state[] 只含
+    * VI_BINDINGS_VALID/VI_BINDING_STRIDES → EMIT_STATE 恒 false，
+    * dynamic_state[VERTEX_INPUT] 永不记录，IB2 缺失 VFD_FETCH/DECODE。
+    * a5xx 无管线烘焙路径（builder 侧跳过），故强制每次记录。 */
+   if (getenv("TU5XX_TRACE"))
+      fprintf(stderr, "[tu5xx-vi] tu_emit_draw_state: chip=%d pipeline_draw_states=0x%x "
+                      "vi_bit=%d attrs_valid=0x%x\n",
+              (int) CHIP, cmd->state.pipeline_draw_states,
+              !!(cmd->state.pipeline_draw_states & (1u << TU_DYNAMIC_STATE_VERTEX_INPUT)),
+              cmd->vk.dynamic_graphics_state.vi->attributes_valid);
+   DRAW_STATE_COND(vertex_input, TU_DYNAMIC_STATE_VERTEX_INPUT,
+                  CHIP == A5XX, cmd->vk.dynamic_graphics_state.vi, cmd);
 
    /* Vertex input stride is special because it's part of the vertex input in
     * the pipeline but a separate array when it's dynamic state so we have to
@@ -4201,9 +4259,11 @@ tu_pipeline_builder_parse_rasterization_order(
 
    pipeline->prim_order.state_gmem = tu_cs_draw_state(&pipeline->cs, &cs, 2);
    if (is_a5xx) {
-      /* tu5xx: a5xx 无 SINGLE_PRIM_MODE，发 0 值保持 draw state 尺寸一致 */
+      /* tu5xx: a5xx 无 SINGLE_PRIM_MODE。fd5（fd5_emit.h）normal draw 始终
+       * 置位 bit3=0x8，此占位 draw state 不得发 0 抹掉它——否则光栅化输出
+       * 被禁用，draw 全部 0 像素。gmem 场景还应加 BINNING_PASS（暂未用）。 */
       tu_cs_emit_pkt4(&cs, REG_A5XX_GRAS_SC_CNTL, 1);
-      tu_cs_emit(&cs, 0);
+      tu_cs_emit(&cs, 0x8);
    } else {
       tu_cs_emit_write_reg(&cs, REG_A6XX_GRAS_SC_CNTL,
                            A6XX_GRAS_SC_CNTL_CCUSINGLECACHELINESIZE(2) |
@@ -4212,8 +4272,9 @@ tu_pipeline_builder_parse_rasterization_order(
 
    pipeline->prim_order.state_sysmem = tu_cs_draw_state(&pipeline->cs, &cs, 2);
    if (is_a5xx) {
+      /* 同上：sysmem/bypass 下亦为 0x8（无 binning）。 */
       tu_cs_emit_pkt4(&cs, REG_A5XX_GRAS_SC_CNTL, 1);
-      tu_cs_emit(&cs, 0);
+      tu_cs_emit(&cs, 0x8);
    } else {
       tu_cs_emit_write_reg(&cs, REG_A6XX_GRAS_SC_CNTL,
                            A6XX_GRAS_SC_CNTL_CCUSINGLECACHELINESIZE(2) |
@@ -4390,8 +4451,22 @@ tu_pipeline_builder_build(struct tu_pipeline_builder *builder,
          tu_pipeline_to_graphics(*pipeline);
       gfx_pipeline->dynamic_state.ms.sample_locations =
          &gfx_pipeline->sample_locations;
+      /* tu5xx: A5XX 不烘焙 vertex_input，静态 VI 须经 cmd 侧动态状态发射，
+       * 必须提供 vi 存储让 vk_dynamic_graphics_state_fill 拷入静态 VI 数据
+       * （a6xx 烘焙路径不受影响：cmd 侧发射被 pipeline_draw_states 挡住）。 */
+      gfx_pipeline->dynamic_state.vi = &gfx_pipeline->vi;
       vk_dynamic_graphics_state_fill(&gfx_pipeline->dynamic_state,
                                      &builder->graphics_state);
+      if (getenv("TU5XX_TRACE"))
+         fprintf(stderr, "[tu5xx-vi] fill: vi_ptr=%d set_vi=%d set_bindvalid=%d "
+                        "attrs_valid=0x%x static_mask_vi=%d p_vi=%d p_dyn_vi=%d\n",
+                 gfx_pipeline->dynamic_state.vi != NULL,
+                 BITSET_TEST(gfx_pipeline->dynamic_state.set, MESA_VK_DYNAMIC_VI),
+                 BITSET_TEST(gfx_pipeline->dynamic_state.set, MESA_VK_DYNAMIC_VI_BINDINGS_VALID),
+                 gfx_pipeline->vi.attributes_valid,
+                 BITSET_TEST(gfx_pipeline->base.static_state_mask, MESA_VK_DYNAMIC_VI),
+                 builder->graphics_state.vi != NULL,
+                 BITSET_TEST(builder->graphics_state.dynamic, MESA_VK_DYNAMIC_VI));
       gfx_pipeline->feedback_loop_color =
          (builder->graphics_state.pipeline_flags &
           VK_PIPELINE_CREATE_2_COLOR_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT);

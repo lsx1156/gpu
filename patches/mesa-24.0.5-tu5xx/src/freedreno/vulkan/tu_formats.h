@@ -37,6 +37,8 @@ struct tu_native_format tu6_format_vtx(enum pipe_format format);
 struct tu_native_format tu5_format_vtx(enum pipe_format format);
 struct tu_native_format tu6_format_color(enum pipe_format format, enum a6xx_tile_mode tile_mode);
 struct tu_native_format tu6_format_texture(enum pipe_format format, enum a6xx_tile_mode tile_mode);
+/* tu5xx: a5xx 颜色格式（RB5），移植自 fd5_pipe2color/fd5_pipe2swap 的常见子集 */
+struct tu_native_format tu5_format_color(enum pipe_format format);
 
 bool tu6_mutable_format_list_ubwc_compatible(const VkImageFormatListCreateInfo *fmt_list);
 

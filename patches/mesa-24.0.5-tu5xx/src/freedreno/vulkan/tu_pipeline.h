@@ -210,6 +210,11 @@ struct tu_graphics_pipeline {
     */
    struct vk_sample_locations_state sample_locations;
 
+   /* tu5xx: static VI 也走 cmd 侧动态发射（管线不烘焙 vertex_input），
+    * 需要 dynamic_state.vi 指向本存储，vk_dynamic_graphics_state_fill
+    * 才会把静态 VI 数据填进 dynamic_state 并在绑定时拷入 cmd。 */
+   struct vk_vertex_input_state vi;
+
    bool feedback_loop_color, feedback_loop_ds;
    bool feedback_loop_may_involve_textures;
 };

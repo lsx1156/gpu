@@ -15,6 +15,7 @@
 
 #include "tu_clear_blit.h"
 #include "tu_cs.h"
+#include "tu_formats.h"
 #include "tu_image.h"
 #include "tu_tracepoints.h"
 
@@ -89,6 +90,13 @@ tu6_lazy_emit_tessfactor_addr(struct tu_cmd_buffer *cmd)
 {
    if (cmd->state.tessfactor_addr_set)
       return;
+
+   /* tu5xx: PC_TESSFACTOR_ADDR(CHIP) 为 a6xx 派发宏（a5xx 空 → 非法包头）；
+    * a5xx 无 tess 支持，跳过 */
+   if (CHIP == A5XX) {
+      cmd->state.tessfactor_addr_set = true;
+      return;
+   }
 
    tu_cs_emit_regs(&cmd->cs, PC_TESSFACTOR_ADDR(CHIP, .qword = cmd->device->tess_bo->iova));
    /* Updating PC_TESSFACTOR_ADDR could race with the next draw which uses it. */
@@ -182,7 +190,10 @@ tu6_emit_flushes(struct tu_cmd_buffer *cmd_buffer,
    if (flushes & TU_CMD_FLAG_CACHE_INVALIDATE)
       tu_emit_event_write<CHIP>(cmd_buffer, cs, FD_CACHE_INVALIDATE);
    if (flushes & TU_CMD_FLAG_BINDLESS_DESCRIPTOR_INVALIDATE) {
-      tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
+      /* tu5xx: HLSQ_INVALIDATE_CMD(CHIP) 为 a6xx 派发宏，a5xx 无对应
+       * variant（空对 → pkt4(reg=0) 非法包头），跳过。 */
+      if (CHIP != A5XX)
+         tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
             .cs_bindless = CHIP == A6XX ? 0x1f : 0xff,
             .gfx_bindless = CHIP == A6XX ? 0x1f : 0xff,
       ));
@@ -383,8 +394,30 @@ tu6_emit_zs<A5XX>(struct tu_cmd_buffer *cmd,
                   const struct tu_subpass *subpass,
                   struct tu_cs *cs)
 {
-   /* tu5xx: 深度/模板附件状态待对照 fd5（RB_DEPTH_BUF_INFO 等）补齐。
-    * 当前第一个三角形探针使用无深度附件的 renderpass，此处 no-op。 */
+   /* tu5xx: 探针无深度/模板附件；对照 fd5_emit_state 的 ZSA 发射段，
+    * 发射全禁用状态，防止复位默认值开启 depth test 杀掉全部 fragment。
+    * （fragz=false：FS 不写 Z，两个 DEPTH_PLANE_CNTL 均为 0。） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_DEPTH_CNTL, 1);
+   tu_cs_emit(cs, 0);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_DEPTH_PLANE_CNTL, 1);
+   tu_cs_emit(cs, 0);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_DEPTH_PLANE_CNTL, 1);
+   tu_cs_emit(cs, 0);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_LRZ_CNTL, 1);
+   tu_cs_emit(cs, 0);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_STENCIL_CONTROL, 1);
+   tu_cs_emit(cs, 0);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_STENCILREFMASK, 2);
+   tu_cs_emit(cs, 0); /* RB_STENCILREFMASK */
+   tu_cs_emit(cs, 0); /* RB_STENCILREFMASK_BF */
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_ALPHA_CONTROL, 1);
+   tu_cs_emit(cs, 0);
 }
 
 template <chip CHIP>
@@ -393,12 +426,6 @@ tu6_emit_mrt(struct tu_cmd_buffer *cmd,
              const struct tu_subpass *subpass,
              struct tu_cs *cs)
 {
-   if (CHIP == A5XX) {
-      /* tu5xx: MRT 状态待对照 fd5（RB_MRT_BUF_INFO/SP_FS_MRT_REG 等）补齐。
-       * 当前探针无颜色附件，no-op。 */
-      return;
-   }
-
    const struct tu_framebuffer *fb = cmd->state.framebuffer;
 
    enum a6xx_format mrt0_format = FMT6_NONE;
@@ -453,6 +480,53 @@ tu6_emit_mrt(struct tu_cmd_buffer *cmd,
 
    unsigned layers = MAX2(fb->layers, util_logbase2(subpass->multiview_mask) + 1);
    tu_cs_emit_regs(cs, A6XX_GRAS_MAX_LAYER_INDEX(layers - 1));
+}
+
+template <>
+void
+tu6_emit_mrt<A5XX>(struct tu_cmd_buffer *cmd,
+                   const struct tu_subpass *subpass,
+                   struct tu_cs *cs)
+{
+   /* tu5xx: MRT 状态，移植自 fd5 emit_mrt（sysmem/bypass 路径）。
+    * bypass 模式下 RB_MRT 直接指向系统内存中的附件。 */
+   for (uint32_t i = 0; i < subpass->color_count; ++i) {
+      uint32_t a = subpass->color_attachments[i].attachment;
+      if (a == VK_ATTACHMENT_UNUSED) {
+         tu_cs_emit_pkt4(cs, REG_A5XX_RB_MRT_BUF_INFO(i), 5);
+         for (unsigned j = 0; j < 5; j++)
+            tu_cs_emit(cs, 0);
+         tu_cs_emit_pkt4(cs, REG_A5XX_SP_FS_MRT_REG(i), 1);
+         tu_cs_emit(cs, 0);
+         continue;
+      }
+
+      const struct tu_image_view *iview = cmd->state.attachments[a];
+      const enum pipe_format pformat = iview->view.format;
+      const struct tu_native_format fmt = tu5_format_color(pformat);
+      const bool srgb = util_format_is_srgb(pformat);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_MRT_BUF_INFO(i), 5);
+      tu_cs_emit(cs, A5XX_RB_MRT_BUF_INFO_COLOR_FORMAT((enum a5xx_color_fmt) fmt.fmt) |
+                     A5XX_RB_MRT_BUF_INFO_COLOR_TILE_MODE(TILE5_LINEAR) |
+                     A5XX_RB_MRT_BUF_INFO_COLOR_SWAP(fmt.swap) |
+                     COND(srgb, A5XX_RB_MRT_BUF_INFO_COLOR_SRGB));
+      /* A5XX_RB_MRT_PITCH/ARRAY_PITCH 宏内部 >>6 编码，传入字节数 */
+      tu_cs_emit(cs, A5XX_RB_MRT_PITCH(iview->view.pitch));
+      tu_cs_emit(cs, A5XX_RB_MRT_ARRAY_PITCH(iview->view.layer_size));
+      tu_cs_emit_qw(cs, iview->view.base_addr);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_SP_FS_MRT_REG(i), 1);
+      tu_cs_emit(cs, A5XX_SP_FS_MRT_REG_COLOR_FORMAT((enum a5xx_color_fmt) fmt.fmt) |
+                     COND(util_format_is_pure_sint(pformat), A5XX_SP_FS_MRT_REG_COLOR_SINT) |
+                     COND(util_format_is_pure_uint(pformat), A5XX_SP_FS_MRT_REG_COLOR_UINT) |
+                     COND(srgb, A5XX_SP_FS_MRT_REG_COLOR_SRGB));
+
+      /* UBWC 未启用，flag buffer 全 0 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_MRT_FLAG_BUFFER(i), 4);
+      for (unsigned j = 0; j < 4; j++)
+         tu_cs_emit(cs, 0);
+   }
 }
 
 struct tu_bin_size_params {
@@ -526,9 +600,13 @@ tu6_emit_render_cntl<A5XX>(struct tu_cmd_buffer *cmd,
                      struct tu_cs *cs,
                      bool binning)
 {
-   /* tu5xx: a5xx bring-up stub. a6xx 的 RB_RENDER_CNTL / CP_REG_WRITE
-    * TRACKER 机制在 a5xx 上不同（fd5 用 RB_RENDER_CONTROL + GRAS_*），
-    * 待对照 fd5 gallium 补齐；当前最小实现为 no-op。 */
+   /* tu5xx: 移植 fd5_emit_render_cntl（非 binning、非 blit 分支）。
+    * RB_RENDER_CNTL/GRAS_SC_CNTL 的 0x8 位 fd5 始终置位。 */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_RENDER_CNTL, 1);
+   tu_cs_emit(cs, binning ? 0x0 : 0x8);
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_CNTL, 1);
+   tu_cs_emit(cs, binning ? 0x0 : 0x8);
 }
 
 template <>
@@ -708,6 +786,12 @@ tu6_apply_depth_bounds_workaround(struct tu_device *device,
                      A6XX_RB_DEPTH_CNTL_ZFUNC(FUNC_ALWAYS);
 }
 
+static inline bool
+tu_cs_is_a5xx(const struct tu_cs *cs)
+{
+   return cs->device->physical_device->info->chip == 5;
+}
+
 static void
 tu_cs_emit_draw_state(struct tu_cs *cs, uint32_t id, struct tu_draw_state state)
 {
@@ -783,17 +867,40 @@ tu_cs_emit_draw_state(struct tu_cs *cs, uint32_t id, struct tu_draw_state state)
        state.writeable)
       enable_mask |= CP_SET_DRAW_STATE__0_DIRTY;
 
-   /* tu5xx: a5xx 固件 draw-state 组表仅支持有限 gid（fd5 从不用组表），
-    * 而 tu 的 TU_DRAW_STATE_* 枚举到 19+（gid 9/10/11/12/26 等越界，
-    * 实测导致 CP 失步 opcode error 0x480B7A01）。a5xx 一律用 LOAD_IMMED
-    * 立即执行组，不落固件组表。 */
-   const bool is_a5xx = cs->device->physical_device->info->chip == 5;
+   /* tu5xx: 不再用 CP_SET_DRAW_STATE 组表（见 tu_cs_emit_draw_state 注释） */
+   const bool is_a5xx = tu_cs_is_a5xx(cs);
 
-   /* tu5xx: 禁用组（size=0/iova=0）与 fd5 一致只发 DISABLE，不带 LOAD_IMMED */
+   if (is_a5xx) {
+      /* tu5xx: a5xx 固件对 CP_SET_DRAW_STATE 组表/LOAD_IMMED 语义不可靠
+       * （gid 越界 -> opcode error 0x480B7A01；gid=0 且无 enable mask ->
+       * fault iova=0x240，LOAD_IMMED 未按 a6xx 语义生效）。
+       * 也不能用 CP_INDIRECT_BUFFER 引用状态 IB：msm 把 preamble/draw_cs
+       * 作为 IB1/IB2 提交，draw_cs 内再跳转即 IB3，a5xx PM4 仅支持两级
+       * IB（fd5 全程内联、从不嵌套），固件报 opcode error 0x70BF8003。
+       * 故把状态 IB 内容原样内联拷贝进当前流（与 fd5 语义一致）。
+       * 空组/禁用组直接跳过。
+       * 注意：writeable 组（GPU 会 patch 的 desc_sets 等）的 GPU-patch
+       * 语义在此退化为录制时快照，vktriangle 无 desc sets 不受影响，
+       * 后续里程碑再处理。 */
+      if (state.size && state.bo) {
+         /* 状态 BO 在录制时已 map（cs BO 始终 CPU 可见） */
+         const uint32_t *src = (const uint32_t *)
+            ((const char *) state.bo->map + (state.iova - state.bo->iova));
+         /* tu5xx 诊断：打印每个内联状态的 id/size/iova（验证后移除） */
+         if (getenv("TU5XX_TRACE"))
+            fprintf(stderr, "[tu5xx-inline] id=%u size=%u iova=0x%" PRIx64
+                            " bo=0x%" PRIx64 " w0=0x%08x wlast=0x%08x\n",
+                    id, state.size, state.iova, state.bo->iova, src[0],
+                    src[state.size - 1]);
+         tu_cs_reserve(cs, state.size);
+         for (uint32_t i = 0; i < state.size; i++)
+            tu_cs_emit(cs, src[i]);
+      }
+      return;
+   }
+
    tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(state.size) |
                   enable_mask |
-                  COND(is_a5xx && state.size && state.iova,
-                       CP_SET_DRAW_STATE__0_LOAD_IMMED) |
                   CP_SET_DRAW_STATE__0_GROUP_ID(id) |
                   COND(!state.size || !state.iova, CP_SET_DRAW_STATE__0_DISABLE));
    tu_cs_emit_qw(cs, state.iova);
@@ -826,6 +933,13 @@ tu6_emit_msaa(struct tu_device *dev, struct tu_cs *cs,
    }
 
    if (dev->physical_device->info->chip == 5) {
+      /* tu5xx: TPL1_TP_*_MSAA_CNTL（fd5_gmem.c emit_msaa，地址连续），
+       * 不发射时 TP 侧 MSAA 模式残留复位默认值 */
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_TP_RAS_MSAA_CNTL, 2);
+      tu_cs_emit(cs, A5XX_TPL1_TP_RAS_MSAA_CNTL_SAMPLES(samples));
+      tu_cs_emit(cs, A5XX_TPL1_TP_DEST_MSAA_CNTL_SAMPLES(samples) |
+                     COND(msaa_disable, A5XX_TPL1_TP_DEST_MSAA_CNTL_MSAA_DISABLE));
+
       tu_cs_emit_pkt4(cs, REG_A5XX_RB_RAS_MSAA_CNTL, 2);
       tu_cs_emit(cs, A5XX_RB_RAS_MSAA_CNTL_SAMPLES(samples));
       tu_cs_emit(cs, A5XX_RB_DEST_MSAA_CNTL_SAMPLES(samples) |
@@ -1211,12 +1325,16 @@ tu6_emit_tile_store(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
 void
 tu_disable_draw_states(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
 {
-   tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
+   /* tu5xx: 无 CP_SET_DRAW_STATE 组表可禁用，dirty 标记让后续 draw
+    * 经 tu6_emit_draw_states 用 CP_INDIRECT_BUFFER 全量重发状态 */
+   if (!tu_cs_is_a5xx(cs)) {
+      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
                      CP_SET_DRAW_STATE__0_DISABLE_ALL_GROUPS |
                      CP_SET_DRAW_STATE__0_GROUP_ID(0));
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+   }
 
    cmd->state.dirty |= TU_CMD_DIRTY_DRAW_STATE;
 }
@@ -1232,6 +1350,8 @@ tu6_init_hw(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
     * (a5xx/fd5_emit.c)。A506 走 !540 分支；GMEM/binning 相关留待
     * renderpass 里程碑补齐。 */
    if (CHIP == A5XX) {
+      /* sentinel: 验证编译/部署链路一致性（验证后移除） */
+      fprintf(stderr, "=== TU5XX-A5XX-INIT-HW-MARKER ===\n");
       /* render mode: BYPASS（fd5_set_render_mode(BYPASS)，去掉 marker） */
       tu_cs_emit_pkt7(cs, CP_SET_RENDER_MODE, 5);
       tu_cs_emit(cs, CP_SET_RENDER_MODE_0_MODE(BYPASS));
@@ -1315,13 +1435,11 @@ tu6_init_hw(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
       tu_cs_emit_pkt4(cs, REG_A5XX_VPC_MODE_CNTL, 1);
       tu_cs_emit(cs, 0x00000000);
 
-      /* 禁用全部 draw-state 组 */
-      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
-      tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
-                     CP_SET_DRAW_STATE__0_DISABLE_ALL_GROUPS |
-                     CP_SET_DRAW_STATE__0_GROUP_ID(0));
-      tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
-      tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+      /* tu5xx: fd5_emit_restore 无 CP_SET_DRAW_STATE disable-all（无组表概念），
+       * 且 a5xx 上该 opcode 走组表语义会引入 0x70bf8003 类条目残留，删除。
+       * sentinel: 0x5a5a0001 用于验证编译/部署链路一致性（验证后移除） */
+      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E292, 1);
+      tu_cs_emit(cs, 0x5a5a0001);
 
       tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_CONSERVATIVE_RAS_CNTL, 1);
       tu_cs_emit(cs, 0x00000000);
@@ -1740,12 +1858,15 @@ tu6_emit_binning_pass(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
     * only VS and GS are invalidated, as FS isn't emitted in binning pass,
     * and we don't use HW binning when tesselation is used
     */
-   tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
-                  CP_SET_DRAW_STATE__0_DISABLE |
-                  CP_SET_DRAW_STATE__0_GROUP_ID(TU_DRAW_STATE_CONST));
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
-   tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+   /* tu5xx: 无 CP_SET_DRAW_STATE 组表，CONST 状态由 draw_cs 顺序重发 */
+   if (!tu_cs_is_a5xx(cs)) {
+      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__0_COUNT(0) |
+                     CP_SET_DRAW_STATE__0_DISABLE |
+                     CP_SET_DRAW_STATE__0_GROUP_ID(TU_DRAW_STATE_CONST));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__1_ADDR_LO(0));
+      tu_cs_emit(cs, CP_SET_DRAW_STATE__2_ADDR_HI(0));
+   }
 
    tu_cs_emit_pkt7(cs, CP_EVENT_WRITE, 1);
    tu_cs_emit(cs, UNK_2D);
@@ -1916,7 +2037,8 @@ tu_set_input_attachments(struct tu_cmd_buffer *cmd, const struct tu_subpass *sub
 {
    struct tu_cs *cs = &cmd->draw_cs;
 
-   tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 6);
+   if (!tu_cs_is_a5xx(cs))
+      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 6);
    tu_cs_emit_draw_state(cs, TU_DRAW_STATE_INPUT_ATTACHMENTS_GMEM,
                          tu_emit_input_attachments(cmd, subpass, true));
    tu_cs_emit_draw_state(cs, TU_DRAW_STATE_INPUT_ATTACHMENTS_SYSMEM,
@@ -2009,10 +2131,46 @@ tu6_sysmem_render_begin<A5XX>(struct tu_cmd_buffer *cmd, struct tu_cs *cs,
 {
    const struct tu_framebuffer *fb = cmd->state.framebuffer;
 
+   /* fd5_event_write(PC_CCU_INVALIDATE_COLOR)（fd5_emit_sysmem_prep） */
+   tu_cs_emit_pkt7(cs, CP_EVENT_WRITE, 1);
+   tu_cs_emit(cs, CP_EVENT_WRITE_0_EVENT(PC_CCU_INVALIDATE_COLOR));
+
    tu_lrz_sysmem_begin(cmd, cs);
+
+   /* fd5_emit_sysmem_prep: PC/VFD_POWER_CNTL + RB_CCU_CNTL(BYPASS) */
+   const uint32_t num_sp =
+      cmd->device->physical_device->info->num_sp_cores;
+   tu_cs_emit_pkt4(cs, REG_A5XX_PC_POWER_CNTL, 1);
+   tu_cs_emit(cs, num_sp - 1);
+   tu_cs_emit_pkt4(cs, REG_A5XX_VFD_POWER_CNTL, 1);
+   tu_cs_emit(cs, num_sp - 1);
+
+   /* 0x10000000 for BYPASS.. 0x7c13c080 for GMEM: */
+   tu_cs_emit_wfi(cs);
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_CCU_CNTL, 1);
+   tu_cs_emit(cs, 0x10000000);
+
+   /* RB_CNTL: bypass 模式（RB 直写系统内存的开关，缺此 RB 不写内存） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_CNTL, 1);
+   tu_cs_emit(cs, A5XX_RB_CNTL_WIDTH(0) | A5XX_RB_CNTL_HEIGHT(0) |
+                     A5XX_RB_CNTL_BYPASS);
 
    assert(fb->width > 0 && fb->height > 0);
    tu6_emit_window_scissor<A5XX>(cs, 0, 0, fb->width - 1, fb->height - 1);
+
+   /* fd5_emit_sysmem_prep: RB_RESOLVE_CNTL_1/2（blit extent） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_RESOLVE_CNTL_1, 2);
+   tu_cs_emit(cs, A5XX_RB_RESOLVE_CNTL_1_X(0) | A5XX_RB_RESOLVE_CNTL_1_Y(0));
+   tu_cs_emit(cs, A5XX_RB_RESOLVE_CNTL_2_X(fb->width - 1) |
+                     A5XX_RB_RESOLVE_CNTL_2_Y(fb->height - 1));
+
+   /* screen scissor 全开，防止复位默认值裁掉全部像素 */
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_SCREEN_SCISSOR_TL_0, 2);
+   tu_cs_emit(cs, A5XX_GRAS_SC_SCREEN_SCISSOR_TL_0_X(0) |
+                     A5XX_GRAS_SC_SCREEN_SCISSOR_TL_0_Y(0));
+   tu_cs_emit(cs, A5XX_GRAS_SC_SCREEN_SCISSOR_BR_0_X(fb->width - 1) |
+                     A5XX_GRAS_SC_SCREEN_SCISSOR_BR_0_Y(fb->height - 1));
+
    tu6_emit_window_offset<A5XX>(cs, 0, 0);
 
    /* tu5xx: 无 CP_SET_MARKER/RM6_BYPASS（a6xx opcode），fd5 用
@@ -2629,7 +2787,8 @@ tu_cmd_dynamic_state(struct tu_cmd_buffer *cmd, uint32_t id, uint32_t size)
    if (cmd->state.dirty & TU_CMD_DIRTY_DRAW_STATE)
       return cs;
 
-   tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
+   if (!tu_cs_is_a5xx(&cmd->draw_cs))
+      tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
    tu_cs_emit_draw_state(&cmd->draw_cs, TU_DRAW_STATE_DYNAMIC + id, cmd->state.dynamic_state[id]);
 
    return cs;
@@ -2648,7 +2807,8 @@ tu_cmd_end_dynamic_state(struct tu_cmd_buffer *cmd, struct tu_cs *cs,
    if (cmd->state.dirty & TU_CMD_DIRTY_DRAW_STATE)
       return;
 
-   tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
+   if (!tu_cs_is_a5xx(&cmd->draw_cs))
+      tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
    tu_cs_emit_draw_state(&cmd->draw_cs, TU_DRAW_STATE_DYNAMIC + id, cmd->state.dynamic_state[id]);
 }
 
@@ -2765,6 +2925,10 @@ tu6_emit_descriptor_sets(struct tu_cmd_buffer *cmd,
             tu_cs_draw_state(&cmd->sub_cs, &state_cs,
                              4 + 4 * descriptors_state->max_sets_bound +
                              (descriptors_state->max_dynamic_offset_size ? 6 : 0));
+      } else if (CHIP == A5XX) {
+         /* a5xx: no bindless bases, no HLSQ_INVALIDATE_CMD -> nothing emitted */
+         cmd->state.desc_sets =
+            tu_cs_draw_state(&cmd->sub_cs, &state_cs, 0);
       } else {
          cmd->state.desc_sets =
             tu_cs_draw_state(&cmd->sub_cs, &state_cs,
@@ -2781,15 +2945,23 @@ tu6_emit_descriptor_sets(struct tu_cmd_buffer *cmd,
       cs = &cmd->cs;
    }
 
-   tu_cs_emit_pkt4(cs, sp_bindless_base_reg, 2 * descriptors_state->max_sets_bound);
-   tu_cs_emit_array(cs, (const uint32_t*)descriptors_state->set_iova, 2 * descriptors_state->max_sets_bound);
+   /* a5xx has no bindless descriptor mechanism: __SP_BINDLESS_BASE_DESCRIPTOR<A5XX>
+    * resolves to reg=0, and emitting a pkt4 header with cnt=0 leaves a dangling
+    * pkt4(reg=0, cnt=0) packet that desynchronizes the command stream.
+    */
+   if (CHIP == A5XX) {
+      /* nothing to emit for bindless bases */
+   } else {
+      tu_cs_emit_pkt4(cs, sp_bindless_base_reg, 2 * descriptors_state->max_sets_bound);
+      tu_cs_emit_array(cs, (const uint32_t*)descriptors_state->set_iova, 2 * descriptors_state->max_sets_bound);
+   }
    if (CHIP == A6XX) {
       tu_cs_emit_pkt4(cs, hlsq_bindless_base_reg, 2 * descriptors_state->max_sets_bound);
       tu_cs_emit_array(cs, (const uint32_t*)descriptors_state->set_iova, 2 * descriptors_state->max_sets_bound);
    }
 
    /* Dynamic descriptors get the reserved descriptor set. */
-   if (descriptors_state->max_dynamic_offset_size) {
+   if (descriptors_state->max_dynamic_offset_size && CHIP != A5XX) {
       int reserved_set_idx = cmd->device->physical_device->reserved_set_idx;
       assert(reserved_set_idx >= 0); /* reserved set must be bound */
 
@@ -2801,10 +2973,13 @@ tu6_emit_descriptor_sets(struct tu_cmd_buffer *cmd,
       }
    }
 
-   tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
+   /* tu5xx: 同 tu6_emit_flushes，a5xx 无 HLSQ_INVALIDATE_CMD variant */
+   if (CHIP != A5XX) {
+      tu_cs_emit_regs(cs, HLSQ_INVALIDATE_CMD(CHIP,
       .cs_bindless = bind_point == VK_PIPELINE_BIND_POINT_COMPUTE ? CHIP == A6XX ? 0x1f : 0xff : 0,
       .gfx_bindless = bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS ? CHIP == A6XX ? 0x1f : 0xff : 0,
    ));
+   }
 
    if (bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       assert(cs->cur == cs->end); /* validate draw state size */
@@ -2812,7 +2987,8 @@ tu6_emit_descriptor_sets(struct tu_cmd_buffer *cmd,
        * which may use the 3D clear path (for MSAA cases)
        */
       if (!(cmd->state.dirty & TU_CMD_DIRTY_DRAW_STATE)) {
-         tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
+         if (!tu_cs_is_a5xx(&cmd->draw_cs))
+            tu_cs_emit_pkt7(&cmd->draw_cs, CP_SET_DRAW_STATE, 3);
          tu_cs_emit_draw_state(&cmd->draw_cs, TU_DRAW_STATE_DESC_SETS, cmd->state.desc_sets);
       }
    }
@@ -3510,7 +3686,8 @@ tu_CmdBindPipeline(VkCommandBuffer commandBuffer,
    if (!(cmd->state.dirty & TU_CMD_DIRTY_DRAW_STATE)) {
       uint32_t mask = pipeline->set_state_mask;
 
-      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3 * (11 + util_bitcount(mask)));
+      if (!tu_cs_is_a5xx(cs))
+         tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3 * (11 + util_bitcount(mask)));
       tu_cs_emit_draw_state(cs, TU_DRAW_STATE_PROGRAM_CONFIG, pipeline->program.config_state);
       tu_cs_emit_draw_state(cs, TU_DRAW_STATE_VS, pipeline->program.vs_state);
       tu_cs_emit_draw_state(cs, TU_DRAW_STATE_VS_BINNING, pipeline->program.vs_binning_state);
@@ -5273,7 +5450,8 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
     * is OK since CmdClearAttachments won't disable/overwrite them
     */
    if (dirty & TU_CMD_DIRTY_DRAW_STATE) {
-      tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3 * (TU_DRAW_STATE_COUNT - 2));
+      if (!tu_cs_is_a5xx(cs))
+         tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3 * (TU_DRAW_STATE_COUNT - 2));
 
       tu_cs_emit_draw_state(cs, TU_DRAW_STATE_PROGRAM_CONFIG, program->config_state);
       tu_cs_emit_draw_state(cs, TU_DRAW_STATE_VS, program->vs_state);
@@ -5309,7 +5487,7 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
          (dirty_fs_params ? 1 : 0) +
          (dirty_lrz ? 1 : 0);
 
-      if (draw_state_count > 0)
+      if (draw_state_count > 0 && !tu_cs_is_a5xx(cs))
          tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3 * draw_state_count);
 
       if (dirty & TU_CMD_DIRTY_SHADER_CONSTS)
@@ -5344,6 +5522,7 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
    return VK_SUCCESS;
 }
 
+template <chip CHIP>
 static uint32_t
 tu_draw_initiator(struct tu_cmd_buffer *cmd, enum pc_di_src_sel src_sel)
 {
@@ -5354,11 +5533,28 @@ tu_draw_initiator(struct tu_cmd_buffer *cmd, enum pc_di_src_sel src_sel)
       primtype = (enum pc_di_primtype) (primtype +
                                         cmd->vk.dynamic_graphics_state.ts.patch_control_points);
 
+   /* A5XX（对照 fd5_draw.h）：
+    * - 非索引绘制（AUTO_INDEX）INDEX_SIZE 须为 32BIT（cmd->state.index_size
+    *   未绑索引缓冲时保持 0xff dirty 标记，截断进 2bit 字段 = 3 = INVALID）；
+    * - sysmem/bypass 无 binning，VIS_CULL 必须 IGNORE_VISIBILITY——
+    *   USE_VISIBILITY 会查询未配置的 VSC 可见流，导致所有图元被剔除（0 像素）。
+    */
+   enum a4xx_index_size idx_size;
+   enum pc_di_vis_cull_mode vis_cull;
+   if (CHIP == A5XX) {
+      idx_size = src_sel == DI_SRC_SEL_DMA ?
+         (enum a4xx_index_size) cmd->state.index_size : INDEX4_SIZE_32_BIT;
+      vis_cull = IGNORE_VISIBILITY;
+   } else {
+      idx_size = (enum a4xx_index_size) cmd->state.index_size;
+      vis_cull = USE_VISIBILITY;
+   }
+
    uint32_t initiator =
       CP_DRAW_INDX_OFFSET_0_PRIM_TYPE(primtype) |
       CP_DRAW_INDX_OFFSET_0_SOURCE_SELECT(src_sel) |
-      CP_DRAW_INDX_OFFSET_0_INDEX_SIZE((enum a4xx_index_size) cmd->state.index_size) |
-      CP_DRAW_INDX_OFFSET_0_VIS_CULL(USE_VISIBILITY);
+      CP_DRAW_INDX_OFFSET_0_INDEX_SIZE(idx_size) |
+      CP_DRAW_INDX_OFFSET_0_VIS_CULL(vis_cull);
 
    if (cmd->state.shaders[MESA_SHADER_GEOMETRY]->variant)
       initiator |= CP_DRAW_INDX_OFFSET_0_GS_ENABLE;
@@ -5491,7 +5687,7 @@ tu6_emit_vs_params(struct tu_cmd_buffer *cmd,
    cmd->state.last_vs_params.draw_id = draw_id;
 
    struct tu_cs_entry entry = tu_cs_end_sub_stream(&cmd->sub_cs, &cs);
-   cmd->state.vs_params = (struct tu_draw_state) {entry.bo->iova + entry.offset, entry.size / 4};
+   cmd->state.vs_params = (struct tu_draw_state) {entry.bo->iova + entry.offset, entry.size / 4, false, entry.bo};
 
    cmd->state.dirty |= TU_CMD_DIRTY_VS_PARAMS;
 }
@@ -5512,7 +5708,7 @@ tu_CmdDraw(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, false, vertexCount);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDX_OFFSET, 3);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_INDEX));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_INDEX));
    tu_cs_emit(cs, instanceCount);
    tu_cs_emit(cs, vertexCount);
 }
@@ -5551,13 +5747,14 @@ tu_CmdDrawMultiEXT(VkCommandBuffer commandBuffer,
          tu6_draw_common<CHIP>(cmd, cs, false, max_vertex_count);
 
       if (cmd->state.dirty & TU_CMD_DIRTY_VS_PARAMS) {
-         tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
+         if (!tu_cs_is_a5xx(cs))
+            tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
          tu_cs_emit_draw_state(cs, TU_DRAW_STATE_VS_PARAMS, cmd->state.vs_params);
          cmd->state.dirty &= ~TU_CMD_DIRTY_VS_PARAMS;
       }
 
       tu_cs_emit_pkt7(cs, CP_DRAW_INDX_OFFSET, 3);
-      tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_INDEX));
+      tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_INDEX));
       tu_cs_emit(cs, instanceCount);
       tu_cs_emit(cs, draw->vertexCount);
    }
@@ -5581,7 +5778,7 @@ tu_CmdDrawIndexed(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, true, indexCount);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDX_OFFSET, 7);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_DMA));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_DMA));
    tu_cs_emit(cs, instanceCount);
    tu_cs_emit(cs, indexCount);
    tu_cs_emit(cs, firstIndex);
@@ -5625,13 +5822,14 @@ tu_CmdDrawMultiIndexedEXT(VkCommandBuffer commandBuffer,
          tu6_draw_common<CHIP>(cmd, cs, true, max_index_count);
 
       if (cmd->state.dirty & TU_CMD_DIRTY_VS_PARAMS) {
-         tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
+         if (!tu_cs_is_a5xx(cs))
+            tu_cs_emit_pkt7(cs, CP_SET_DRAW_STATE, 3);
          tu_cs_emit_draw_state(cs, TU_DRAW_STATE_VS_PARAMS, cmd->state.vs_params);
          cmd->state.dirty &= ~TU_CMD_DIRTY_VS_PARAMS;
       }
 
       tu_cs_emit_pkt7(cs, CP_DRAW_INDX_OFFSET, 7);
-      tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_DMA));
+      tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_DMA));
       tu_cs_emit(cs, instanceCount);
       tu_cs_emit(cs, draw->indexCount);
       tu_cs_emit(cs, draw->firstIndex);
@@ -5675,7 +5873,7 @@ tu_CmdDrawIndirect(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, false, 0);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDIRECT_MULTI, 6);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_INDEX));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_INDEX));
    tu_cs_emit(cs, A6XX_CP_DRAW_INDIRECT_MULTI_1_OPCODE(INDIRECT_OP_NORMAL) |
                   A6XX_CP_DRAW_INDIRECT_MULTI_1_DST_OFF(vs_params_offset(cmd)));
    tu_cs_emit(cs, drawCount);
@@ -5704,7 +5902,7 @@ tu_CmdDrawIndexedIndirect(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, true, 0);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDIRECT_MULTI, 9);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_DMA));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_DMA));
    tu_cs_emit(cs, A6XX_CP_DRAW_INDIRECT_MULTI_1_OPCODE(INDIRECT_OP_INDEXED) |
                   A6XX_CP_DRAW_INDIRECT_MULTI_1_DST_OFF(vs_params_offset(cmd)));
    tu_cs_emit(cs, drawCount);
@@ -5742,7 +5940,7 @@ tu_CmdDrawIndirectCount(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, false, 0);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDIRECT_MULTI, 8);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_INDEX));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_INDEX));
    tu_cs_emit(cs, A6XX_CP_DRAW_INDIRECT_MULTI_1_OPCODE(INDIRECT_OP_INDIRECT_COUNT) |
                   A6XX_CP_DRAW_INDIRECT_MULTI_1_DST_OFF(vs_params_offset(cmd)));
    tu_cs_emit(cs, drawCount);
@@ -5774,7 +5972,7 @@ tu_CmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer,
    tu6_draw_common<CHIP>(cmd, cs, true, 0);
 
    tu_cs_emit_pkt7(cs, CP_DRAW_INDIRECT_MULTI, 11);
-   tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_DMA));
+   tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_DMA));
    tu_cs_emit(cs, A6XX_CP_DRAW_INDIRECT_MULTI_1_OPCODE(INDIRECT_OP_INDIRECT_COUNT_INDEXED) |
                   A6XX_CP_DRAW_INDIRECT_MULTI_1_DST_OFF(vs_params_offset(cmd)));
    tu_cs_emit(cs, drawCount);
@@ -5813,9 +6011,9 @@ tu_CmdDrawIndirectByteCountEXT(VkCommandBuffer commandBuffer,
 
    tu_cs_emit_pkt7(cs, CP_DRAW_AUTO, 6);
    if (CHIP == A6XX) {
-      tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_XFB));
+      tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_XFB));
    } else {
-      tu_cs_emit(cs, tu_draw_initiator(cmd, DI_SRC_SEL_AUTO_INDEX));
+      tu_cs_emit(cs, tu_draw_initiator<CHIP>(cmd, DI_SRC_SEL_AUTO_INDEX));
       /* On a7xx the counter value and offset are shifted right by 2, so
        * the vertexStride should also be in units of dwords.
        */

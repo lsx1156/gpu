@@ -115,6 +115,7 @@ int main(void)
     DPA(vkCreateBuffer); DPA(vkAllocateMemory); DPA(vkBindBufferMemory);
     DPA(vkMapMemory); DPA(vkUnmapMemory);
     DPA(vkCreateImage); DPA(vkBindImageMemory); DPA(vkCreateImageView);
+    DPA(vkGetImageSubresourceLayout);
     DPA(vkGetBufferMemoryRequirements); DPA(vkGetImageMemoryRequirements);
     DPA(vkCreateRenderPass); DPA(vkCreateFramebuffer);
     DPA(vkCreateShaderModule); DPA(vkCreatePipelineLayout);
@@ -122,6 +123,7 @@ int main(void)
     DPA(vkCreateCommandPool); DPA(vkAllocateCommandBuffers);
     DPA(vkBeginCommandBuffer); DPA(vkEndCommandBuffer);
     DPA(vkCmdBeginRenderPass); DPA(vkCmdBindPipeline);
+    DPA(vkCmdFillBuffer);
     DPA(vkCmdBindVertexBuffers); DPA(vkCmdDraw); DPA(vkCmdEndRenderPass);
     DPA(vkQueueSubmit); DPA(vkWaitForFences); DPA(vkQueueWaitIdle);
     DPA(vkCreateFence); DPA(vkDestroyFence);
@@ -135,7 +137,8 @@ int main(void)
     VkQueue queue;
     vkGetDeviceQueue(dev, 0, 0, &queue);
 
-    /* ---- image + view (颜色附件, 256x256 RGBA8) ---- */
+    /* ---- image + view (颜色附件, 256x256 RGBA8) ----
+     * M1.4: LINEAR tiling + HOST_VISIBLE 内存，draw 后 CPU 直接读回验证。 */
     const uint32_t W = 256, H = 256;
     VkImageCreateInfo ici2 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -144,7 +147,7 @@ int main(void)
         .extent = { W, H, 1 },
         .mipLevels = 1, .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .tiling = VK_IMAGE_TILING_LINEAR,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -155,7 +158,11 @@ int main(void)
     VkMemoryRequirements mr;
     vkGetImageMemoryRequirements(dev, image, &mr);
     uint32_t mt = find_mem_type(pd, mr.memoryTypeBits,
-                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &memprops);
+                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &memprops);
+    if (mt == 0xffffffffu)
+        mt = find_mem_type(pd, mr.memoryTypeBits,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &memprops);
     printf("  image mem type = %u (bits 0x%x, size %llu)\n",
            mt, mr.memoryTypeBits, (unsigned long long)mr.size);
     VkMemoryAllocateInfo mai = {
@@ -164,6 +171,24 @@ int main(void)
     VkDeviceMemory img_mem;
     CHK(vkAllocateMemory(dev, &mai, NULL, &img_mem), "vkAllocateMemory(image)");
     CHK(vkBindImageMemory(dev, image, img_mem, 0), "vkBindImageMemory");
+
+    /* 预填充背景: 黑色不透明 (0,0,0,255)——loadOp=DONT_CARE 下驱动不清屏,
+     * draw 后非背景像素即三角形覆盖。 */
+    VkImageSubresource isr = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+    VkSubresourceLayout srl;
+    vkGetImageSubresourceLayout(dev, image, &isr, &srl);
+    printf("  image row pitch = %u (offset %llu)\n",
+           (unsigned)srl.rowPitch, (unsigned long long)srl.offset);
+    void* im;
+    CHK(vkMapMemory(dev, img_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(bg)");
+    for (uint32_t y = 0; y < H; y++) {
+        uint8_t* row = (uint8_t*)im + srl.offset + y * srl.rowPitch;
+        for (uint32_t x = 0; x < W; x++) {
+            row[x * 4 + 0] = 0; row[x * 4 + 1] = 0;
+            row[x * 4 + 2] = 0; row[x * 4 + 3] = 255;
+        }
+    }
+    vkUnmapMemory(dev, img_mem);
 
     VkImageViewCreateInfo ivci = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -178,7 +203,7 @@ int main(void)
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,  /* M1.4: DONT_CARE 不写回附件 */
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -306,6 +331,23 @@ int main(void)
     memcpy(m, verts, sizeof verts);
     vkUnmapMemory(dev, vbo_mem);
 
+    /* ---- M1.4 隔离实验: GPU 直接写 host-visible 内存通路 ---- */
+    VkBufferCreateInfo fbci2 = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = 4096,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
+    VkBuffer fbuf;
+    CHK(vkCreateBuffer(dev, &fbci2, NULL, &fbuf), "vkCreateBuffer(fill)");
+    vkGetBufferMemoryRequirements(dev, fbuf, &mr);
+    mt = find_mem_type(pd, mr.memoryTypeBits,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &memprops);
+    mai.allocationSize = mr.size; mai.memoryTypeIndex = mt;
+    VkDeviceMemory fbuf_mem;
+    CHK(vkAllocateMemory(dev, &mai, NULL, &fbuf_mem), "vkAllocateMemory(fill)");
+    CHK(vkBindBufferMemory(dev, fbuf, fbuf_mem, 0), "vkBindBufferMemory(fill)");
+
     /* ---- command buffer: renderpass + draw ---- */
     VkCommandPoolCreateInfo cpci = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -339,6 +381,8 @@ int main(void)
     vkCmdDraw(cb, 3, 1, 0, 0);
     printf("  OK: vkCmdDraw(3) (recorded)\n");
     vkCmdEndRenderPass(cb);
+    /* 隔离实验: renderpass 外 fill buffer，验证 GPU 写 host 内存 */
+    vkCmdFillBuffer(cb, fbuf, 0, VK_WHOLE_SIZE, 0xAABBCCDD);
     CHK(vkEndCommandBuffer(cb), "vkEndCommandBuffer");
 
     /* ---- submit + fence ---- */
@@ -361,6 +405,43 @@ int main(void)
     r = vkQueueWaitIdle(queue);
     printf("== vkQueueWaitIdle => %s (0x%x) ==\n",
            r == VK_SUCCESS ? "OK" : "ERR", (unsigned)r);
+
+    /* ---- M1.4: 像素读回验证 ---- */
+    CHK(vkMapMemory(dev, img_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(readback)");
+    const uint8_t bg[4] = { 0, 0, 0, 255 };
+    const uint8_t exp[4] = { 0, 255, 0, 255 };  /* FS 输出绿色 */
+    uint32_t hit = 0, green = 0;
+    for (uint32_t y = 0; y < H; y++) {
+        const uint8_t* row = (const uint8_t*)im + srl.offset + y * srl.rowPitch;
+        for (uint32_t x = 0; x < W; x++) {
+            const uint8_t* p = row + x * 4;
+            if (memcmp(p, bg, 4) != 0)
+                hit++;
+            if (memcmp(p, exp, 4) == 0)
+                green++;
+        }
+    }
+    const uint8_t* c = (const uint8_t*)im + srl.offset + (H / 2) * srl.rowPitch + (W / 2) * 4;
+    printf("== readback: center(%u,%u) = RGBA(%u,%u,%u,%u)  nonbg=%u  green=%u ==\n",
+           W / 2, H / 2, c[0], c[1], c[2], c[3], hit, green);
+    /* 三角形顶点 (0,-0.8) (-0.8,0.8) (0.8,0.8)，NDC 中心在内部；
+     * 面积比 ~0.64*0.5 → 期望 green > 2 万像素 */
+    printf("== verify: %s ==\n",
+           (c[1] == 255 && c[0] == 0 && c[2] == 0 && c[3] == 255 && green > 20000)
+              ? "TRIANGLE RASTERIZED OK" : "FAIL (center not green or no coverage)");
+    vkUnmapMemory(dev, img_mem);
+
+    /* 隔离实验结果 */
+    void* fm;
+    CHK(vkMapMemory(dev, fbuf_mem, 0, 4096, 0, &fm), "vkMapMemory(fill)");
+    uint32_t fill_ok = 1;
+    const uint32_t* fw = (const uint32_t*)fm;
+    for (int i = 0; i < 1024; i++) {
+        if (fw[i] != 0xAABBCCDD) { fill_ok = 0; break; }
+    }
+    printf("== fill buffer: %s (first=0x%08x) ==\n",
+           fill_ok ? "GPU WRITE OK" : "GPU WRITE FAIL", fw[0]);
+    vkUnmapMemory(dev, fbuf_mem);
 
     /* ---- cleanup ---- */
     vkDestroyFence(dev, fence, NULL);
