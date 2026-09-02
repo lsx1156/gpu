@@ -1445,9 +1445,9 @@ tu6_init_hw(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
 
       /* tu5xx: fd5_emit_restore 无 CP_SET_DRAW_STATE disable-all（无组表概念），
        * 且 a5xx 上该 opcode 走组表语义会引入 0x70bf8003 类条目残留，删除。
-       * sentinel: 0x5a5a0001 用于验证编译/部署链路一致性（验证后移除） */
-      tu_cs_emit_pkt4(cs, REG_A5XX_UNKNOWN_E292, 1);
-      tu_cs_emit(cs, 0x5a5a0001);
+       * UNKNOWN_E292(0xe292, VPC 寄存器组内) 已在上面 0x0 正确发射，勿重复写入 ——
+       * 之前遗留的 sentinel 0x5a5a0001 覆盖该 VPC 模式寄存器，破坏坐标/参数处理
+       * （导致 ndc_y<0 被裁 + varying flat 同源根因，已移除）。 */
 
       tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SU_CONSERVATIVE_RAS_CNTL, 1);
       tu_cs_emit(cs, 0x00000000);

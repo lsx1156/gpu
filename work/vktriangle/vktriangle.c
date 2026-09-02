@@ -309,11 +309,12 @@ int main(void)
         "vkCreateGraphicsPipelines");
 
     /* ---- vertex buffer (host visible) ---- */
-    /* 多彩验证: 3 顶点各带颜色 (R/G/B), 每顶点 = pos3 + color3 */
+    /* GEOM PROBE: 全 NDC 区域大三角形（验证裁剪范围 + varying 分布）.
+     * 底边 y=-1(左下红,右下绿), 顶点 y=1(上中蓝). 完整应覆盖 y=0..255, x 从中心到满宽. */
     static const float verts[3][6] = {
-        {  0.0f, -0.8f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 下(顶)红 */
-        { -0.8f,  0.8f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 左上绿 */
-        {  0.8f,  0.8f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 右上蓝 */
+        { -1.0f, -1.0f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 左下 红 */
+        {  1.0f, -1.0f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 右下 绿 */
+        {  0.0f,  1.0f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 上中 蓝 */
     };
     VkBufferCreateInfo bci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -411,20 +412,11 @@ int main(void)
     printf("== vkQueueWaitIdle => %s (0x%x) ==\n",
            r == VK_SUCCESS ? "OK" : "ERR", (unsigned)r);
 
-    /* ---- 多彩验证: 像素读回 ---- */
+    /* ---- GEOM PROBE: 像素读回 ---- */
     CHK(vkMapMemory(dev, img_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(readback)");
     const uint8_t bg[4] = { 0, 0, 0, 255 };
     const uint8_t* px = (const uint8_t*)im + srl.offset; /* 取色辅助 */
-    /* screen(x,y) = map(ndc) -> (x,y,v[4])
-     * 顶点 NDC: 红(0,-0.8)->(128,26)顶, 绿(-0.8,0.8)->(26,230)左下, 蓝(0.8,0.8)->(230,230)右下
-     * probe 取各顶点内侧一点（略向中心偏移） */
-    struct { int x, y; } pro[3] = {
-        { 128,  50 }, /* 红顶点附近 */
-        {  50, 200 }, /* 绿顶点附近 */
-        { 206, 200 }, /* 蓝顶点附近 */
-    };
-    const char* pro_name[3] = { "red", "green", "blue" };
-    uint32_t hit = 0, ok = 1;
+    uint32_t hit = 0;
     int first_nb = -1, last_nb = -1;
     for (uint32_t y = 0; y < H; y++) {
         const uint8_t* row = px + y * srl.rowPitch;
@@ -438,24 +430,24 @@ int main(void)
     }
     printf("== readback: nonbg=%u  y-range(first..last)=%d..%d ==\n",
            hit, first_nb, last_nb);
-    /* 验证三个顶点附近各自主导对应 R/G/B 通道(平滑插值) */
-    for (int i = 0; i < 3; i++) {
-        const uint8_t* p = px + pro[i].y * srl.rowPitch + pro[i].x * 4;
-        uint8_t v[3] = { p[0], p[1], p[2] };           /* R,G,B (读回为直 RGBA) */
-        int dom = (v[1] > v[0] ? (v[2] > v[1] ? 2 : 1) : (v[2] > v[0] ? 2 : 0));
-        int want = (i == 0 ? 0 : (i == 1 ? 1 : 2));
-        int pass = (dom == want) && v[want] > 128;
-        printf("  probe %s@(%d,%d) = RGB(%u,%u,%u)  dom=%c  %s\n",
-               pro_name[i], pro[i].x, pro[i].y, v[0], v[1], v[2],
-               "RGB"[dom], pass ? "OK" : "MISMATCH");
-        if (!pass) ok = 0;
+    /* 每 16 行打印: x 非背景范围 [minx,maxx] + 中点(128)颜色 + 左侧(32)颜色 */
+    for (uint32_t y = 0; y < H; y += 16) {
+        const uint8_t* row = px + y * srl.rowPitch;
+        int minx = -1, maxx = -1;
+        for (uint32_t x = 0; x < W; x++)
+            if (memcmp(row + x * 4, bg, 4) != 0) {
+                if (minx < 0) minx = x;
+                maxx = x;
+            }
+        if (minx >= 0) {
+            const uint8_t* cl = row + 32 * 4;
+            const uint8_t* cc = row + 128 * 4;
+            printf("  y=%3u x=[%3d..%3d] left=(%3u,%3u,%3u) mid=(%3u,%3u,%3u)\n",
+                   y, minx, maxx, cl[0], cl[1], cl[2], cc[0], cc[1], cc[2]);
+        } else {
+            printf("  y=%3u EMPTY\n", y);
+        }
     }
-    const uint8_t* c = px + (H / 2) * srl.rowPitch + (W / 2) * 4;
-    printf("== readback: center(%u,%u) = RGBA(%u,%u,%u,%u) ==\n",
-           W / 2, H / 2, c[0], c[1], c[2], c[3]);
-    printf("== verify: %s ==\n",
-           (ok && hit > 20000) ? "MULTICOLOR RASTERIZED OK"
-                               : "FAIL (probe color mismatch or no coverage)");
     vkUnmapMemory(dev, img_mem);
 
     /* 隔离实验结果 */
