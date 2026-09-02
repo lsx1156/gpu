@@ -246,16 +246,18 @@ int main(void)
     VkVertexInputBindingDescription vib = {
         .binding = 0, .stride = 7 * sizeof(float),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
-    VkVertexInputAttributeDescription via[2] = {
+    VkVertexInputAttributeDescription via[3] = {
         { .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT,
           .offset = 0 },
-        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,
           .offset = 3 * sizeof(float) },
+        { .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = 5 * sizeof(float) },
     };
     VkPipelineVertexInputStateCreateInfo vi = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1, .pVertexBindingDescriptions = &vib,
-        .vertexAttributeDescriptionCount = 2, .pVertexAttributeDescriptions = via };
+        .vertexAttributeDescriptionCount = 3, .pVertexAttributeDescriptions = via };
 
     VkPipelineInputAssemblyStateCreateInfo ia = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
