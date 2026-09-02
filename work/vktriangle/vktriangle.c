@@ -309,12 +309,13 @@ int main(void)
         "vkCreateGraphicsPipelines");
 
     /* ---- vertex buffer (host visible) ---- */
-    /* GEOM PROBE: 全 NDC 区域大三角形（验证裁剪范围 + varying 分布）.
-     * 底边 y=-1(左下红,右下绿), 顶点 y=1(上中蓝). 完整应覆盖 y=0..255, x 从中心到满宽. */
+    /* 多彩验证: 3 顶点各带颜色 (R/G/B), 每顶点 = pos3 + color3
+     * 标准 Vulkan viewport: px_y = 128 + 128*ndc_y, ndc_y=-1 -> 顶部(y=0)
+     * 红(0,-0.8)->(128,26)顶, 绿(-0.8,0.8)->(26,230)左下, 蓝(0.8,0.8)->(230,230)右下 */
     static const float verts[3][6] = {
-        { -1.0f, -1.0f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 左下 红 */
-        {  1.0f, -1.0f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 右下 绿 */
-        {  0.0f,  1.0f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 上中 蓝 */
+        {  0.0f, -0.8f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 顶部 红 */
+        { -0.8f,  0.8f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 左下 绿 */
+        {  0.8f,  0.8f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 右下 蓝 */
     };
     VkBufferCreateInfo bci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -447,6 +448,14 @@ int main(void)
         } else {
             printf("  y=%3u EMPTY\n", y);
         }
+    }
+    /* 三顶点 probe: 红顶(128,26) 绿左(26,230) 蓝右(230,230), 各向内偏移避开顶点 */
+    struct { int x, y; } pro[3] = { {128, 50}, {50, 210}, {206, 210} };
+    const char* pro_name[3] = { "red", "green", "blue" };
+    for (int i = 0; i < 3; i++) {
+        const uint8_t* p = px + pro[i].y * srl.rowPitch + pro[i].x * 4;
+        printf("  probe %s@(%d,%d) = RGB(%u,%u,%u)\n",
+               pro_name[i], pro[i].x, pro[i].y, p[0], p[1], p[2]);
     }
     vkUnmapMemory(dev, img_mem);
 
