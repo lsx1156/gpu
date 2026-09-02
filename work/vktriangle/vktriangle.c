@@ -415,21 +415,29 @@ int main(void)
     CHK(vkMapMemory(dev, img_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(readback)");
     const uint8_t bg[4] = { 0, 0, 0, 255 };
     const uint8_t* px = (const uint8_t*)im + srl.offset; /* 取色辅助 */
-    /* screen(x,y) = map(ndc) -> (x,y,v[4]) */
+    /* screen(x,y) = map(ndc) -> (x,y,v[4])
+     * 顶点 NDC: 红(0,-0.8)->(128,26)顶, 绿(-0.8,0.8)->(26,230)左下, 蓝(0.8,0.8)->(230,230)右下
+     * probe 取各顶点内侧一点（略向中心偏移） */
     struct { int x, y; } pro[3] = {
-        { 128, 189 }, /* 下(顶)红 ~ndc(0,-0.48) */
-        {  56,  46 }, /* 左上绿 ~ndc(-0.56,0.64) */
-        { 200,  46 }, /* 右上蓝 ~ndc(0.56,0.64) */
+        { 128,  50 }, /* 红顶点附近 */
+        {  50, 200 }, /* 绿顶点附近 */
+        { 206, 200 }, /* 蓝顶点附近 */
     };
     const char* pro_name[3] = { "red", "green", "blue" };
     uint32_t hit = 0, ok = 1;
+    int first_nb = -1, last_nb = -1;
     for (uint32_t y = 0; y < H; y++) {
         const uint8_t* row = px + y * srl.rowPitch;
+        unsigned rowcnt = 0;
         for (uint32_t x = 0; x < W; x++)
-            if (memcmp(row + x * 4, bg, 4) != 0)
+            if (memcmp(row + x * 4, bg, 4) != 0) {
+                rowcnt++;
                 hit++;
+            }
+        if (rowcnt) { if (first_nb < 0) first_nb = y; last_nb = y; }
     }
-    printf("== readback: nonbg=%u ==\n", hit);
+    printf("== readback: nonbg=%u  y-range(first..last)=%d..%d ==\n",
+           hit, first_nb, last_nb);
     /* 验证三个顶点附近各自主导对应 R/G/B 通道(平滑插值) */
     for (int i = 0; i < 3; i++) {
         const uint8_t* p = px + pro[i].y * srl.rowPitch + pro[i].x * 4;
