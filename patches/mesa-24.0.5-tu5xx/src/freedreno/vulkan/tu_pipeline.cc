@@ -867,10 +867,11 @@ tu5_emit_vpc(struct tu_cs *cs,
          }
       }
    }
-   if (interp_regs) {
-      tu_cs_emit_pkt4(cs, REG_A5XX_VPC_VARYING_INTERP_MODE(0), interp_regs);
-      tu_cs_emit_array(cs, vinterp, interp_regs);
-   }
+   /* tu5xx: 对齐 fd5_program.c —— VPC_VARYING_INTERP_MODE 固定发射全部 8 个寄存器
+    *（fd5 固定发 8 个覆盖 inloc 0..127；之前只发 interp_regs 个，第 3+ 分量
+    * 的插值模式未发射 -> 硬件默认值导致 varying 前 2 分量对、第 3+ 读 0） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_VPC_VARYING_INTERP_MODE(0), 8);
+   tu_cs_emit_array(cs, vinterp, 8);
 
    /* tu5xx: point-sprite 替换暂不支持，PS_REPL 全 0（fd5 无 sprite 时同样为 0） */
    tu_cs_emit_pkt4(cs, REG_A5XX_VPC_VARYING_PS_REPL_MODE(0), 8);
