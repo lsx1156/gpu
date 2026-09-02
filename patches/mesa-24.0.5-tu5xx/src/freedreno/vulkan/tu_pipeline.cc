@@ -829,30 +829,40 @@ tu5_emit_vpc(struct tu_cs *cs,
                   0x10000); /* XXX fd5 */
 
    tu_cs_emit_pkt4(cs, REG_A5XX_VPC_PACK, 1);
+   /* fd5: NUMNONPOSVAR = FS total_in（真正的 varying 数量，不含 pos/psize） */
    tu_cs_emit(cs, A5XX_VPC_PACK_NUMNONPOSVAR(fs ? fs->total_in : 0) |
                   A5XX_VPC_PACK_PSIZELOC(psize_loc));
 
-   /* varying 插值模式（fd5: flat → 2bit=FLAT，按分量 inloc 排布；无 flat varying 时完全不发射） */
+   /* varying 插值模式（fd5: flat → 2bit=FLAT，smooth → 0=SMOOTH，按分量 inloc 排布；
+ * 有 varying 时必须显式发射所有相关寄存器，SMOOTH=0 也要发，防止硬件用随机默认值） */
+   uint32_t vinterp[8] = {0};
    uint32_t interp_regs = 0;
    if (fs) {
-      uint32_t vinterp[8] = {0};
       for (int i = -1;
            (i = ir3_next_varying(fs, i)) < (int) fs->inputs_count;) {
-         if (!(fs->inputs[i].flat || fs->inputs[i].rasterflat))
-            continue;
 
          uint32_t loc = fs->inputs[i].inloc;
+         uint32_t mode = (fs->inputs[i].flat || fs->inputs[i].rasterflat) ? 1 : 0; /* 1=FLAT, 0=SMOOTH */
+
          for (unsigned c = 0; c < 4; c++) {
             if (fs->inputs[i].compmask & (1 << c)) {
-               vinterp[loc / 16] |= 1 << ((loc % 16) * 2); /* 1 = FLAT */
+               vinterp[loc / 16] |= mode << ((loc % 16) * 2);
                loc++;
             }
          }
       }
-      /* 计算最高非零寄存器索引 */
+      /* 计算最高非零寄存器索引（含显式 0 的 SMOOTH 分量也要算在内，所以找最后一个有 varying 的寄存器） */
       for (int i = 7; i >= 0; i--) {
          if (vinterp[i]) {
             interp_regs = i + 1;
+            break;
+         }
+      }
+      /* 如果有 varying 但全是 SMOOTH（vinterp 全 0），也要发至少 1 个寄存器（全 0） */
+      if (interp_regs == 0) {
+         for (int i = -1;
+              (i = ir3_next_varying(fs, i)) < (int) fs->inputs_count;) {
+            interp_regs = (fs->inputs[i].inloc / 16) + 1;
             break;
          }
       }
