@@ -244,12 +244,12 @@ int main(void)
 
     /* 多彩验证: 每个顶点携带 pos(vec3) + color(vec3), stride=6 float */
     VkVertexInputBindingDescription vib = {
-        .binding = 0, .stride = 6 * sizeof(float),
+        .binding = 0, .stride = 7 * sizeof(float),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
     VkVertexInputAttributeDescription via[2] = {
         { .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT,
           .offset = 0 },
-        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT,
+        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT,
           .offset = 3 * sizeof(float) },
     };
     VkPipelineVertexInputStateCreateInfo vi = {
@@ -309,13 +309,11 @@ int main(void)
         "vkCreateGraphicsPipelines");
 
     /* ---- vertex buffer (host visible) ---- */
-    /* 多彩验证: 3 顶点各带颜色 (R/G/B), 每顶点 = pos3 + color3
-     * 标准 Vulkan viewport: px_y = 128 + 128*ndc_y, ndc_y=-1 -> 顶部(y=0)
-     * 红(0,-0.8)->(128,26)顶, 绿(-0.8,0.8)->(26,230)左下, 蓝(0.8,0.8)->(230,230)右下 */
-    static const float verts[3][6] = {
-        {  0.0f, -0.8f, 0.0f,  1.0f, 0.0f, 0.0f },  /* 顶部 红 */
-        { -0.8f,  0.8f, 0.0f,  0.0f, 1.0f, 0.0f },  /* 左下 绿 */
-        {  0.8f,  0.8f, 0.0f,  0.0f, 0.0f, 1.0f },  /* 右下 蓝 */
+    /* 多彩验证(vec4): 每顶点 = pos3 + color4(RGBA), stride 7 */
+    static const float verts[3][7] = {
+        {  0.0f, -0.8f, 0.0f,  1.0f, 0.0f, 0.0f, 1.0f },  /* 顶部 红 */
+        { -0.8f,  0.8f, 0.0f,  0.0f, 1.0f, 0.0f, 1.0f },  /* 左下 绿 */
+        {  0.8f,  0.8f, 0.0f,  0.0f, 0.0f, 1.0f, 1.0f },  /* 右下 蓝 */
     };
     VkBufferCreateInfo bci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,

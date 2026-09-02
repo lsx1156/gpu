@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """手工编码 SPIR-V（无 glslangValidator 环境），生成 spirv_tri.h。
 
-H2B 选项3（f0da08f 可跑通版本）：
-- VS: 每顶点读 location0 的 vec3 顶点位置 -> gl_Position(w=1)
-      location1 的 vec3 顶点颜色 -> 透传为 location0 varying(vec3)，逐顶点插值
-      （out_col 用 location 0 = slot32/VAR0，与 glsmooth 工作参照同构）
-- FS: 读入 location0 varying(vec3) 顶点颜色 -> location0 输出 vec4(rgb, a=1.0)
-      （无 Flat 装饰，走 bary.f 硬件插值路径）
+vec4 颜色 varying（当前验证版）：
+- VS: location0 vec3 顶点位置 -> gl_Position(w=1)
+      location1 vec4 顶点颜色 -> 透传为 location0 varying(vec4)，逐顶点插值
+- FS: location0 读入 varying 顶点颜色(vec4) -> location0 输出 vec4(rgba)
 
-注意：
-- id 严格按 s.id() 顺序分配，header 的 bound = 最大分配 id+1（<0x3FFFFF）。
-  不得硬编码大值，否则 Mesa spirv_to_nir 按超界 bound 为海量 id 分配内存导致 OOM。
-- "main" 字符串按 SPIR-V 规范写入：ascii + NUL + 4 字节对齐补齐。
-- 不要加 vec2 + OpCompositeExtract 过度处理，直接 vec3 直连即可（f0da08f 验证可跑）。
+当前实测（sentinel 修复后驱动）：
+- 红/绿分量（bary.f inloc 0,1）完全正确
+- 蓝/alpha 分量（bary.f inloc 2,3）读 0 —— A5XX varying >2 分量问题，待查
+
+注意：id 严格按 s.id() 顺序分配，bound=最大id+1（<0x3FFFFF）。
+"main" 字符串：ascii + NUL + 4 字节对齐。
+不要用 OpCompositeExtract 对 varying 取分量（触发 Mesa vtn_base_type_image 误判）。
 """
 
 import struct
@@ -48,7 +48,7 @@ class Spirv:
 
 def build_vs():
     """VS: location0 vec3 顶点位置 -> gl_Position(w=1)
-    location1 vec3 顶点颜色 -> 透传为 location0 varying(vec3)，逐顶点插值"""
+    location1 vec4 顶点颜色 -> 透传为 location0 varying(vec4)，逐顶点插值"""
     s = Spirv()
     main_id = s.id()      # 1
     gl_pos = s.id()       # 2  BuiltIn Position 输出
@@ -62,9 +62,10 @@ def build_vs():
     t_v3 = s.id()         # 9
     t_v4 = s.id()         # 10
     p_out_v4 = s.id()     # 11
-    p_out_v3 = s.id()     # 12
-    p_in_v3 = s.id()      # 13
-    c_one = s.id()        # 14
+    p_out_v4c = s.id()    # 12 Output(vec4) 颜色
+    p_in_v3 = s.id()      # 13 Input(vec3) pos
+    p_in_v4c = s.id()     # 14 Input(vec4) 颜色
+    c_one = s.id()        # 15
 
     s.inst(0x0011, [1])                  # OpCapability Shader
     s.inst(0x000E, [0, 1])               # OpMemoryModel Logical GLSL450
@@ -72,8 +73,6 @@ def build_vs():
     s.inst(0x0003, [1, 450])             # OpSource GLSL 450
     s.inst(0x0047, [gl_pos, 11, 0])      # OpDecorate gl_Position BuiltIn(Position)
     s.inst(0x0047, [in_pos, 30, 0])      # OpDecorate in_pos Location(0)
-    # H2B 选项3: varying 输出 location 0 -> slot32(VAR0)，与 glsmooth 参照同构。
-    # 顶点输入 in_col 仍用 location 1（对应 VBO color 属性）。
     s.inst(0x0047, [in_col, 30, 1])      # OpDecorate in_col Location(1) (顶点输入)
     s.inst(0x0047, [out_col, 30, 0])     # OpDecorate out_col Location(0) (varying 输出)
 
@@ -82,26 +81,27 @@ def build_vs():
     s.inst(0x0016, [t_f32, 32])          # OpTypeFloat 32
     s.inst(0x0017, [t_v3, t_f32, 3])     # OpTypeVector 3
     s.inst(0x0017, [t_v4, t_f32, 4])     # OpTypeVector 4
-    s.inst(0x0020, [p_out_v4, 3, t_v4])  # OpTypePointer Output
-    s.inst(0x0020, [p_out_v3, 3, t_v3])  # OpTypePointer Output(vec3)
+    s.inst(0x0020, [p_out_v4, 3, t_v4])  # OpTypePointer Output(vec4) pos
+    s.inst(0x0020, [p_out_v4c, 3, t_v4]) # OpTypePointer Output(vec4) color
     s.inst(0x0020, [p_in_v3, 1, t_v3])   # OpTypePointer Input(vec3)
+    s.inst(0x0020, [p_in_v4c, 1, t_v4])  # OpTypePointer Input(vec4)
     s.inst(0x002B, [t_f32, c_one, 0x3F800000])  # OpConstant 1.0
 
-    s.inst(0x003B, [p_out_v4, gl_pos, 3])  # OpVariable Output (Position)
-    s.inst(0x003B, [p_out_v3, out_col, 3]) # OpVariable Output (varying color)
-    s.inst(0x003B, [p_in_v3, in_pos, 1])   # OpVariable Input
-    s.inst(0x003B, [p_in_v3, in_col, 1])   # OpVariable Input
+    s.inst(0x003B, [p_out_v4, gl_pos, 3])   # OpVariable Output (Position)
+    s.inst(0x003B, [p_out_v4c, out_col, 3]) # OpVariable Output (varying color vec4)
+    s.inst(0x003B, [p_in_v3, in_pos, 1])    # OpVariable Input (pos vec3)
+    s.inst(0x003B, [p_in_v4c, in_col, 1])   # OpVariable Input (color vec4)
 
     fn_id = main_id  # OpEntryPoint 的 id 必须就是入口函数的 result id
-    lbl = s.id()      # 15
-    pos = s.id()      # 16
-    col = s.id()      # 17
-    glp = s.id()      # 18
+    lbl = s.id()      # 16
+    pos = s.id()      # 17
+    col = s.id()      # 18
+    glp = s.id()      # 19
     s.inst(0x0036, [t_void, fn_id, 0, t_fn])   # OpFunction
     s.inst(0x00F8, [lbl])                      # OpLabel
-    s.inst(0x003D, [t_v3, pos, in_pos])        # OpLoad pos
-    s.inst(0x003D, [t_v3, col, in_col])        # OpLoad color
-    s.inst(0x003E, [out_col, col])             # OpStore out_color (varying)
+    s.inst(0x003D, [t_v3, pos, in_pos])        # OpLoad pos (vec3)
+    s.inst(0x003D, [t_v4, col, in_col])        # OpLoad color (vec4)
+    s.inst(0x003E, [out_col, col])             # OpStore out_color (varying vec4)
     s.inst(0x0050, [t_v4, glp, pos, c_one])    # OpCompositeConstruct v4(pos, 1.0)
     s.inst(0x003E, [gl_pos, glp])              # OpStore gl_Position
     s.inst(0x00FD, [])                         # OpReturn
@@ -110,7 +110,7 @@ def build_vs():
 
 
 def build_fs():
-    """FS: location0 读入 varying 顶点颜色(vec3) -> location0 输出 vec4(rgb, 1.0)"""
+    """FS: location0 读入 varying 顶点颜色(vec4) -> location0 输出 vec4(rgba)"""
     s = Spirv()
     main_id = s.id()      # 1
     out_col = s.id()      # 2
@@ -119,42 +119,34 @@ def build_fs():
     t_void = s.id()       # 4
     t_fn = s.id()         # 5
     t_f32 = s.id()        # 6
-    t_v3 = s.id()         # 7
-    t_v4 = s.id()         # 8
-    p_out_v4 = s.id()     # 9
-    p_in_v3 = s.id()      # 10
-    c_one = s.id()        # 11
+    t_v4 = s.id()         # 7
+    p_out_v4 = s.id()     # 8
+    p_in_v4 = s.id()      # 9
 
     s.inst(0x0011, [1])                  # OpCapability Shader
     s.inst(0x000E, [0, 1])               # OpMemoryModel Logical GLSL450
     s.inst(0x000F, [4, main_id, b"main", out_col, in_col])
     s.inst(0x0010, [main_id, 7])         # OpExecutionMode OriginUpperLeft (=7)
     s.inst(0x0047, [out_col, 30, 0])     # OpDecorate out_col Location(0)
-    # H2B 选项3: FS in_col 亦 location 0 -> slot32(VAR0) 平滑插值路径(bary.f)，
-    # 去掉 Flat 装饰 -> 走 bary.f 硬件插值。
     s.inst(0x0047, [in_col, 30, 0])      # OpDecorate in_col Location(0)
 
     s.inst(0x0013, [t_void])
     s.inst(0x0021, [t_fn, t_void])
     s.inst(0x0016, [t_f32, 32])
-    s.inst(0x0017, [t_v3, t_f32, 3])
     s.inst(0x0017, [t_v4, t_f32, 4])
     s.inst(0x0020, [p_out_v4, 3, t_v4])
-    s.inst(0x0020, [p_in_v3, 1, t_v3])
-    s.inst(0x002B, [t_f32, c_one, 0x3F800000])
+    s.inst(0x0020, [p_in_v4, 1, t_v4])
 
     s.inst(0x003B, [p_out_v4, out_col, 3])
-    s.inst(0x003B, [p_in_v3, in_col, 1])
+    s.inst(0x003B, [p_in_v4, in_col, 1])
 
     fn_id = main_id  # OpEntryPoint 的 id 必须就是入口函数的 result id
-    lbl = s.id()      # 12
-    col = s.id()      # 13
-    cv = s.id()       # 14
+    lbl = s.id()      # 10
+    col = s.id()      # 11
     s.inst(0x0036, [t_void, fn_id, 0, t_fn])
     s.inst(0x00F8, [lbl])
-    s.inst(0x003D, [t_v3, col, in_col])     # OpLoad in_color (varying)
-    s.inst(0x0050, [t_v4, cv, col, c_one])  # OpCompositeConstruct v4(col, 1.0)
-    s.inst(0x003E, [out_col, cv])           # OpStore out_col
+    s.inst(0x003D, [t_v4, col, in_col])     # OpLoad in_color (varying vec4)
+    s.inst(0x003E, [out_col, col])          # OpStore out_col (vec4)
     s.inst(0x00FD, [])
     s.inst(0x0038, [])
     return s
