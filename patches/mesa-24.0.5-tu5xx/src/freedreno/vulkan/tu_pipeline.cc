@@ -1442,7 +1442,7 @@ tu5_emit_program_config(struct tu_cs *cs,
       }
 
       tu_cs_emit_pkt4(cs, REG_A5XX_HLSQ_CONTROL_0_REG, 5);
-      tu_cs_emit(cs, A5XX_HLSQ_CONTROL_0_REG_FSTHREADSIZE(fssz) |
+      tu_cs_emit(cs, A5XX_HLSQ_CONTROL_0_REG_FSTHREADSIZE(TWO_QUADS) |
                         A5XX_HLSQ_CONTROL_0_REG_CSTHREADSIZE(TWO_QUADS) |
                         0x00000880); /* XXX fd5 */
       tu_cs_emit(cs, A5XX_HLSQ_CONTROL_1_REG_PRIMALLOCTHRESHOLD(63));

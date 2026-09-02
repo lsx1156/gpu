@@ -181,7 +181,7 @@ int main(void){
         "varying vec3 vColor;"
         "void main(){"
         "  gl_Position=vec4(aPos,0.0,1.0);"
-        "  vColor=vec3((aPos.x+1.0)*0.5,(aPos.y+1.0)*0.5,(aPos.x+aPos.y+2.0)*0.25);"
+        "  vColor=vec3((aPos.x+1.0)*0.5,(aPos.y+1.0)*0.5,(aPos.x+1.0)*0.25);"
         "}";
     const char* fsrc =
         "precision mediump float;"

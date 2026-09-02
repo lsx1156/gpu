@@ -1132,7 +1132,11 @@ tu5_emit_xs(struct tu_cs *cs,
                     /* XXX: blob 几乎处处置位 */
                     0x40002 |
                     COND(instrlen != 0, A5XX_SP_FS_CTRL_REG0_BUFFER) |
-                    A5XX_SP_FS_CTRL_REG0_THREADSIZE(fssz) |
+                    /* tu5xx: 强制 FS TWO_QUADS（与 fd5 一致）。fd5 实测 SP_FS_CTRL_REG0
+                     * THREADSIZE=TWO_QUADS(bit3) 且 3 分量 varying 正确；tu5xx 之前用
+                     * FOUR_QUADS(无 bit3) 导致 per-primitive varying 存储布局不同，
+                     * 第 3+ 分量读 0。H2b 实验：强制 TWO_QUADS 验证。 */
+                    A5XX_SP_FS_CTRL_REG0_THREADSIZE(TWO_QUADS) |
                     A5XX_SP_FS_CTRL_REG0_HALFREGFOOTPRINT(xs->info.max_half_reg + 1) |
                     A5XX_SP_FS_CTRL_REG0_FULLREGFOOTPRINT(xs->info.max_reg + 1) |
                     A5XX_SP_FS_CTRL_REG0_BRANCHSTACK(ir3_shader_branchstack_hw(xs)) |
