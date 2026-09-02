@@ -2195,6 +2195,12 @@ tu6_sysmem_render_begin<A5XX>(struct tu_cmd_buffer *cmd, struct tu_cs *cs,
 
    tu_emit_cache_flush_ccu<A5XX>(cmd, cs, TU_CMD_CCU_SYSMEM);
 
+   /* fd5_emit_sysmem_prep: emit_restore 已置 VPC_SO_OVERRIDE=SO_DISABLE，
+    * 无 binning 时须清除该 override 使 VPC 正常运行 varying 递送
+    * （SO_BUF_CNTL 保持 0，无 transform-feedback，不触发 stream-out 无害）。 */
+   tu_cs_emit_pkt4(cs, REG_A5XX_VPC_SO_OVERRIDE, 1);
+   tu_cs_emit(cs, 0);
+
    /* CP_SET_VISIBILITY_OVERRIDE 为 A5XX 起可用，无 binning 时全部可见 */
    tu_cs_emit_pkt7(cs, CP_SET_VISIBILITY_OVERRIDE, 1);
    tu_cs_emit(cs, 0x1);
@@ -5327,6 +5333,27 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
 
    tu_emit_cache_flush_renderpass<CHIP>(cmd);
 
+  /* tu5xx(A5XX): PC_PRIMITIVE_CNTL 每个 draw 无条件发射（fd5_emit.c 模式），
+   * STRIDE_IN_VPC 取管线级 VPC 状态 program->vpc_stride。之前错误包在 dynamic
+   * primitive_restart/provoking_vertex 条件里，静态 pipeline 永不发射 ->
+   * 硬件用默认 STRIDE，FS 读 per-primitive varying 存储地址错位 -> varying 全 0（flat 绿）。 */
+  if (CHIP == A5XX) {
+     bool primitive_restart_enabled =
+        cmd->vk.dynamic_graphics_state.ia.primitive_restart_enable;
+     bool primitive_restart = primitive_restart_enabled && indexed;
+     bool provoking_vtx_last =
+        cmd->vk.dynamic_graphics_state.rs.provoking_vertex ==
+        VK_PROVOKING_VERTEX_MODE_LAST_VERTEX_EXT;
+
+     tu_cs_emit_pkt4(cs, REG_A5XX_PC_PRIMITIVE_CNTL, 1);
+     tu_cs_emit(cs,
+                A5XX_PC_PRIMITIVE_CNTL_STRIDE_IN_VPC(program->vpc_stride) |
+                COND(primitive_restart,
+                     A5XX_PC_PRIMITIVE_CNTL_PRIMITIVE_RESTART) |
+                COND(provoking_vtx_last,
+                     A5XX_PC_PRIMITIVE_CNTL_PROVOKING_VTX_LAST));
+  }
+
   if (BITSET_TEST(cmd->vk.dynamic_graphics_state.dirty,
                   MESA_VK_DYNAMIC_IA_PRIMITIVE_RESTART_ENABLE) ||
       BITSET_TEST(cmd->vk.dynamic_graphics_state.dirty,
@@ -5339,16 +5366,7 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
          cmd->vk.dynamic_graphics_state.rs.provoking_vertex ==
          VK_PROVOKING_VERTEX_MODE_LAST_VERTEX_EXT;
 
-      if (CHIP == A5XX) {
-         /* tu5xx: PC_PRIMITIVE_CNTL（fd5_emit.c 模式，STRIDE 取自 VPC 状态） */
-         tu_cs_emit_pkt4(cs, REG_A5XX_PC_PRIMITIVE_CNTL, 1);
-         tu_cs_emit(cs,
-                    A5XX_PC_PRIMITIVE_CNTL_STRIDE_IN_VPC(program->vpc_stride) |
-                    COND(primitive_restart,
-                         A5XX_PC_PRIMITIVE_CNTL_PRIMITIVE_RESTART) |
-                    COND(provoking_vtx_last,
-                         A5XX_PC_PRIMITIVE_CNTL_PROVOKING_VTX_LAST));
-      } else {
+      if (CHIP != A5XX) {
          uint32_t primitive_cntl_0 =
             A6XX_PC_PRIMITIVE_CNTL_0(.primitive_restart = primitive_restart,
                                      .provoking_vtx_last = provoking_vtx_last).value;
