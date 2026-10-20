@@ -550,6 +550,14 @@ static bool
 lower_tex(nir_builder *b, nir_tex_instr *tex, struct tu_device *dev,
           struct tu_shader *shader, const struct tu_pipeline_layout *layout)
 {
+   /* tu5xx: a5xx 没有 bindless 描述符缓冲。fd5 的做法是着色器里直接写
+    * 固定的 TEX/SAMP 单元号，状态由 CP_LOAD_STATE4 推进 TPL1（见
+    * tu_cmd_buffer.cc: tu5xx_emit_textures）。所以这里不做 deref→handle
+    * 降级，保留 SPIR-V 的 texture_index/sampler_index，ir3 才会生成
+    * 立即数形式 `sam..., s#N, t#M`。 */
+   if (dev->physical_device->info->chip == 5)
+      return false;
+
    lower_tex_ycbcr(layout, b, tex);
 
    int sampler_src_idx = nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref);
@@ -864,6 +872,12 @@ tu_lower_io(nir_shader *shader, struct tu_device *dev,
                                             lower_instr,
                                             nir_metadata_none,
                                             &params);
+
+   /* tu5xx: a5xx 走固定单元号路径。lower_tex 已为 chip==5 跳过 deref→handle，
+    * 这里用通用 pass 把剩余 deref 转成 texture_index/sampler_index
+    * （base_index = var->data.binding，见 nir_lower_samplers.c）。 */
+   if (dev->physical_device->info->chip == 5)
+      progress |= nir_lower_samplers(shader);
 
    /* Remove now-unused variables so that when we gather the shader info later
     * they won't be counted.

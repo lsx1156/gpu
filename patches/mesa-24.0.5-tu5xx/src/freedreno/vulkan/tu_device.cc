@@ -3298,6 +3298,9 @@ tu_init_sampler(struct tu_device *device,
    /* TODO:
     * A6XX_TEX_SAMP_1_MIPFILTER_LINEAR_FAR disables mipmapping, but vk has no NONE mipfilter?
     */
+
+   /* tu5xx: a5xx 无 bindless 采样器状态块，draw 时按 Vk 参数现拼 texsamp0..3 */
+   sampler->info = *pCreateInfo;
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

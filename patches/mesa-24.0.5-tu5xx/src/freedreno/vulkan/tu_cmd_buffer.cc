@@ -5294,6 +5294,81 @@ tu6_emit_fs_params(struct tu_cmd_buffer *cmd)
       tu_cs_set_writeable(&cmd->sub_cs, false);
 }
 
+/* tu5xx: a5xx 没有 bindless 描述符缓冲。tile 里每 draw 前把 FS 用到的纹理/采样器
+ * 状态经 CP_LOAD_STATE4 直接推进 TPL1 状态块（与 fd5 emit_textures 同构）。
+ * 描述符槽里已经是 a5xx 的 12 dword 纹理常量 + 4 dword 采样器格式
+ * （见 tu_descriptor_set.cc: tu5xx_write_tex_descriptor）。 */
+#define TU5XX_MAX_TEX 16
+
+static void
+tu5xx_emit_textures(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
+{
+   const uint32_t *tex[TU5XX_MAX_TEX];
+   const uint32_t *samp[TU5XX_MAX_TEX];
+   uint32_t n = 0;
+
+   for (uint32_t s = 0; s < MAX_SETS && n < TU5XX_MAX_TEX; s++) {
+      const struct tu_descriptor_set *set = cmd->descriptors[0].sets[s];
+      if (!set || !set->layout)
+         continue;
+      const struct tu_descriptor_set_layout *sl = set->layout;
+      for (uint32_t b = 0; b < sl->binding_count && n < TU5XX_MAX_TEX; b++) {
+         const struct tu_descriptor_set_binding_layout *bl = &sl->binding[b];
+         if (bl->type != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+            continue;
+         for (uint32_t a = 0; a < bl->array_size && n < TU5XX_MAX_TEX; a++, n++) {
+            const uint32_t *d = set->mapped_ptr + (bl->offset + a * bl->size) / 4;
+            tex[n] = d;
+            samp[n] = d + A6XX_TEX_CONST_DWORDS;
+            if (getenv("TU5XX_TEX_DEBUG")) {
+               fprintf(stderr,
+                       "tu5xx tex[%u] set=%u bind=%u off=%u ptr=%p: %08x %08x %08x %08x "
+                       "%08x %08x | samp %08x %08x %08x %08x\n",
+                       n, s, b, bl->offset, (void *) d, d[0], d[1], d[2], d[3],
+                       d[4], d[5], d[16], d[17], d[18], d[19]);
+            }
+         }
+      }
+   }
+
+   if (n == 0) {
+      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_FS_TEX_COUNT, 1);
+      tu_cs_emit(cs, 0);
+      return;
+   }
+
+   /* 采样器：4 dword/unit */
+   tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + A6XX_TEX_SAMP_DWORDS * n);
+   tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(0) |
+                  CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
+                  CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
+                  CP_LOAD_STATE4_0_NUM_UNIT(n));
+   tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_SHADER) |
+                  CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
+   tu_cs_emit(cs, 0);
+   for (uint32_t i = 0; i < n; i++) {
+      for (uint32_t j = 0; j < A6XX_TEX_SAMP_DWORDS; j++)
+         tu_cs_emit(cs, samp[i] ? samp[i][j] : 0);
+   }
+
+   /* 纹理常量：前 12 dword（STATE_TYPE = ST4_CONSTANTS，与采样器不同！） */
+   tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + 12 * n);
+   tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(0) |
+                  CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
+                  CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
+                  CP_LOAD_STATE4_0_NUM_UNIT(n));
+   tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_CONSTANTS) |
+                  CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
+   tu_cs_emit(cs, 0);
+   for (uint32_t i = 0; i < n; i++) {
+      for (uint32_t j = 0; j < 12; j++)
+         tu_cs_emit(cs, tex[i] ? tex[i][j] : 0);
+   }
+
+   tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_FS_TEX_COUNT, 1);
+   tu_cs_emit(cs, n);
+}
+
 template <chip CHIP>
 static VkResult
 tu6_draw_common(struct tu_cmd_buffer *cmd,
@@ -5311,6 +5386,10 @@ tu6_draw_common(struct tu_cmd_buffer *cmd,
        (cmd->state.dirty & ~TU_CMD_DIRTY_COMPUTE_DESC_SETS)) {
       dynamic_draw_state_dirty = tu_emit_draw_state<CHIP>(cmd);
    }
+
+   /* tu5xx: a5xx 无 bindless，纹理状态必须在 draw 前直接推入 TPL1 */
+   if (CHIP == A5XX)
+      tu5xx_emit_textures(cmd, cs);
 
    /* Fill draw stats for autotuner */
    rp->drawcall_count++;
