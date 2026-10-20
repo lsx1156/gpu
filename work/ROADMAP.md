@@ -8,7 +8,7 @@
 | 目标 | 可行性 | 说明 |
 |---|---|---|
 | 自研 a5xx Vulkan 后端，跑通探针与简单图形程序 | **可行，已过半** | 核心链路（draw / varying / MRT / 纹理）全部真机验证 |
-| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，M2.3+M2.4 门槛已过** | 剩 M2.5 wrap 与 M3.x 性能 |
+| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，M2.3+M2.4 门槛已过** | M2.5 wrap 亦已验，剩 M3.x 性能与真实应用联调 |
 | 替代 blob 跑真实 3D 游戏 | **不可行** | 需 tiled rendering + 大量 Vulkan 特性，工作量 10× 以上 |
 | 通过 VK-GL-CTS / dEQP | **不可行** | 上万用例，涉及 tiling/barrier/queries/compute/多队列 |
 
@@ -69,14 +69,22 @@
 - 上限：每 set 8 绑定、最多 2 set。`pDynamicOffsets`、UBO/storage、push descriptor 未支持。
 - 详见 `work/M2_4_multi_set.md`；回归 `vk_set` 已入期望表（8/8）。
 
-### M2.5 越界 wrap 语义（0.5–1 天）**← 下一步**
+### M2.5 越界 wrap 语义 ✅ 2026-10-20（验证型，无需改驱动）
 - 目标：REPEAT / MIRROR_REPEAT / CLAMP_TO_BORDER 在 uv ∉ [0,1] 时正确。
 - 做法：探针把 uv 乘 2（新增 SPIR-V 模式 `tex2x2repeat`，`OpFMul` + float 常量 2.0），
   2×2 纹理平铺成 4×4 色块；CLAMP 会拉边、REPEAT 会重复、MIRROR 会镜像，三者直方图形态不同。
 - 验收：三种模式输出三套可区分的直方图（色块数 16 / 拉边形态 / 镜像形态）。
 - 风险：低（编码已按 `fd5_texture.c` 写死，测的只是验证）。
 
-### M3.1 tiled 纹理（3–5 天，性能第一块）
+### M2.5 结论摘要
+
+- 三套 addressMode 真机语义正确，**本轮零驱动改动**：CLAMP `W x102 R x102`、REPEAT 8 段 25/26、
+  MIRROR 4 段 51（周期 2 而非 1，块宽是判据）。
+- `vkCmdBindDescriptorSets` 在记录期重绑同一 set 索引会刷新状态块（三条带各用不同 sampler）。
+- 未测：`BORDER`（缺 borderColor 通路）、`MIRROR_CLAMP_TO_EDGE`、各向异性、shadow compare。
+- 详见 `work/M2_5_wrap.md`；回归 `vk_wrap` 已入期望表（9/9）。
+
+### M3.1 tiled 纹理（3–5 天，性能第一块）**← 下一步**
 - 目标：`VK_IMAGE_TILING_OPTIMAL` 走 tiled layout（TILE5_3 或等价），linear 仅作回退。
 - 前置：`fdl/freedreno_layout.h` 的 tile 描述 + `fd5_texture.c` 的 TILE_MODE/SWAP/UBWC 选择。
 - 验收：同一张 64×64 纹理分别以 linear/tiled 上传，采样结果逐像素相同（用 CRC/直方图对比）；
@@ -115,7 +123,7 @@
 | 1 | M2.0 回归套件 | 0.5 天 | 回退一处能被脚本抓到 |
 | 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
 | 3 | M2.4 多 set ✅ | 实际 0.5 天 | 左 20808/右 20808 双色；退回 binding-only 编号 → 单色 41616 反证 |
-| 4 | M2.5 越界 wrap | 0.5–1 天 | 三套可区分直方图 |
+| 4 | M2.5 越界 wrap ✅ | 实际 0.2 天 | CLAMP W102/R102；REPEAT 8 段 25/26；MIRROR 4 段 51 |
 | 5 | M3.1 tiled 纹理 | 3–5 天 | linear/tiled 采样一致性 |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |
 | 7 | M3.3 真实应用 | 2–4 天 | 10 分钟稳定 + fps 数据 |

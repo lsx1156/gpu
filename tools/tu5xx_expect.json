@@ -113,6 +113,19 @@
         {"kind": "rgba", "marker": "left(set0)", "rgba": [10, 200, 90, 255], "tol": 2},
         {"kind": "rgba", "marker": "right(set1)", "rgba": [200, 60, 10, 255], "tol": 2}
       ]
+    },
+    {
+      "name": "vk_wrap",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_wrap",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "regex", "pattern": "nonbg=41616"},
+        {"kind": "regex", "pattern": "CLAMP  y=\\s*60 RLE: W x1[0-9][0-9] R x1[0-9][0-9]"},
+        {"kind": "regex", "pattern": "REPEAT y=\\s*128 RLE: (?:R x2[0-9] W x2[0-9] ){3}R x2[0-9] W x2[0-9]"},
+        {"kind": "regex", "pattern": "MIRROR y=\\s*196 RLE: R x5[0-9] W x5[0-9] R x5[0-9] W x5[0-9]"}
+      ]
     }
   ]
 }
