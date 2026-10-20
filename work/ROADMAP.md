@@ -84,14 +84,26 @@
 - 未测：`BORDER`（缺 borderColor 通路）、`MIRROR_CLAMP_TO_EDGE`、各向异性、shadow compare。
 - 详见 `work/M2_5_wrap.md`；回归 `vk_wrap` 已入期望表（9/9）。
 
-### M3.1 tiled 纹理（3–5 天，性能第一块）**← 下一步**
+### M3.1 tiled 纹理（第一段 ✅ 2026-10-20；第二段未做）
 - 目标：`VK_IMAGE_TILING_OPTIMAL` 走 tiled layout（TILE5_3 或等价），linear 仅作回退。
 - 前置：`fdl/freedreno_layout.h` 的 tile 描述 + `fd5_texture.c` 的 TILE_MODE/SWAP/UBWC 选择。
 - 验收：同一张 64×64 纹理分别以 linear/tiled 上传，采样结果逐像素相同（用 CRC/直方图对比）；
   再用带宽可感的场景（多次重绘 1080p 全屏纹理）记录耗时差。
 - 风险：高。swizzle 一错就是错色/错位，且错法不直观 —— 验收必须先做「linear vs tiled 一致性」。
 
-### M3.2 tiled rendering / GMEM（5–10 天，风险最高）
+### M3.1 结论摘要（第一段）
+
+- `VK_IMAGE_TILING_OPTIMAL`（cpp>=4）在 a5xx 用 **TILE5_3**，pitch/size 只受对齐规则影响：
+  128×128 RGBA8 ⇒ pitch 512、size 65536。
+- 三处必须一致：`tu_image.cc` 选 tile_mode、`tu_cmd_buffer.cc` 的 `RB_MRT_BUF_INFO_COLOR_TILE_MODE`、
+  `tu_descriptor_set.cc` 纹理常量 dword0 的 `TILE_MODE`（后两处原为硬编码 LINEAR）。
+- 真机：tiled 渲染目标 → tiled 采样 → linear 输出，与纯 linear 参考 256×256 逐字节**零差异**；
+  四象限 4 色各 16384。
+- 反证：只把描述符侧退回 linear ⇒ 65536 字节差异、右半两象限错色。
+- 未做：主机侧直写 tiled（需 swizzle 规则，即 `vkCmdCopyBufferToImage` 的缺口）、cpp<4、TILE5_2。
+- 详见 `work/M3_1_tiled.md`；回归 `vk_tile`（10/10）。
+
+### M3.2 tiled rendering / GMEM（5–10 天，风险最高）**← 下一步**
 - 目标：去掉 `TU_DEBUG=sysmem`，走 binning + GMEM + resolve。
 - 内容：binning pass、tile 描述符、`RB_` 系列的 tile 配置、resolve/clear 的 GMEM 版本、与 sysmem 的开关切换。
 - 验收：既有全部探针在 GMEM 路径下输出与 sysmem 逐像素一致；1080p 简单场景帧时间下降。
@@ -124,7 +136,7 @@
 | 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
 | 3 | M2.4 多 set ✅ | 实际 0.5 天 | 左 20808/右 20808 双色；退回 binding-only 编号 → 单色 41616 反证 |
 | 4 | M2.5 越界 wrap ✅ | 实际 0.2 天 | CLAMP W102/R102；REPEAT 8 段 25/26；MIRROR 4 段 51 |
-| 5 | M3.1 tiled 纹理 | 3–5 天 | linear/tiled 采样一致性 |
+| 5 | M3.1 tiled 纹理 ✅(第一段) | 实际 0.4 天 | tiled 往返与 linear 直采逐字节相同(0/262144)；单侧退回 ⇒ 65536 字节差异 |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |
 | 7 | M3.3 真实应用 | 2–4 天 | 10 分钟稳定 + fps 数据 |
 

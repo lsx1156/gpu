@@ -332,8 +332,8 @@ tu5xx 驱动当前处于「能光栅化但 varying 插值未通」阶段。按�
 | **M2.3** | mipmap 链 | 四级 LOD 整屏纯色与各级一致 | **✅ 2026-10-20**（fdl5 布局 + `MIPLVLS`；见 `work/M2_3_mipmap.md`） |
 | **M2.4** | 多 descriptor set | 两 set 同 binding 0 各取各的纹理 | **✅ 2026-10-20**（`unit=set*8+binding`；见 `work/M2_4_multi_set.md`） |
 | **M2.5** | 越界 wrap（REPEAT/MIRROR/BORDER） | 三种模式输出可区分直方图 | M2.2 |
-| **M3.1** | tiled 纹理 | linear/tiled 采样逐像素一致 | M2.x |
-| **M3.2** | GMEM / binning 路径 | 全部探针在 GMEM 下与 sysmem 逐像素一致 | M3.1 |
+| **M3.1** | tiled 纹理 | linear/tiled 采样逐像素一致 | **✅ 第一段 2026-10-20**（tiled 往返 vs linear 逐字节 0 差异） |
+| **M3.2** | GMEM / binning 路径 | 全部探针在 GMEM 下与 sysmem 逐像素一致 | M3.1 第一段 | **下一步** |
 | **M3.3** | 端到端真实应用（非测试桩） | 连续 10 分钟无 fault，记录 fps | M2.4 |
 | **远期** | angle/GLES 互操作 & Chromium hw 合成 | 复用已验证 GL 通路，Chromium 硬件加速恢复 | M3.x |
 

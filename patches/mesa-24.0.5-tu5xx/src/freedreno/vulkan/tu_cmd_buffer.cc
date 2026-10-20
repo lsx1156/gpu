@@ -505,10 +505,15 @@ tu6_emit_mrt<A5XX>(struct tu_cmd_buffer *cmd,
       const enum pipe_format pformat = iview->view.format;
       const struct tu_native_format fmt = tu5_format_color(pformat);
       const bool srgb = util_format_is_srgb(pformat);
+      /* a5xx：渲染目标的 tile mode 必须与图像布局一致（linear 或 TILE5_3），
+       * 否则 RB 按错误的像素排布写内存，采样端读到的是碎块。 */
+      const unsigned lvl = iview->vk.base_mip_level;
+      const uint32_t tile_mode =
+         iview->image ? fdl_tile_mode(&iview->image->layout[0], lvl) : TILE5_LINEAR;
 
       tu_cs_emit_pkt4(cs, REG_A5XX_RB_MRT_BUF_INFO(i), 5);
       tu_cs_emit(cs, A5XX_RB_MRT_BUF_INFO_COLOR_FORMAT((enum a5xx_color_fmt) fmt.fmt) |
-                     A5XX_RB_MRT_BUF_INFO_COLOR_TILE_MODE(TILE5_LINEAR) |
+                     A5XX_RB_MRT_BUF_INFO_COLOR_TILE_MODE((enum a5xx_tile_mode) tile_mode) |
                      A5XX_RB_MRT_BUF_INFO_COLOR_SWAP(fmt.swap) |
                      COND(srgb, A5XX_RB_MRT_BUF_INFO_COLOR_SRGB));
       /* A5XX_RB_MRT_PITCH/ARRAY_PITCH 宏内部 >>6 编码，传入字节数 */

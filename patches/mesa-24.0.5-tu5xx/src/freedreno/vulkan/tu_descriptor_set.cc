@@ -1114,9 +1114,11 @@ tu5xx_write_tex_descriptor(uint32_t *dst, const VkDescriptorImageInfo *image_inf
    const uint64_t addr = iview->view.base_addr;
    const uint32_t mip_levels = iview->vk.level_count > 0 ? iview->vk.level_count - 1 : 0;
 
-   /* dword0：TILE_MODE(linear) | FMT | SRGB | SWIZ(X,Y,Z,W 恒等) | MIPLVLS(0=1 级) */
+   /* dword0：TILE_MODE | FMT | SRGB | SWIZ(X,Y,Z,W 恒等) | MIPLVLS(0=1 级) */
+   const unsigned lvl = iview->vk.base_mip_level;
+   const uint32_t tm = iview->image ? fdl_tile_mode(&iview->image->layout[0], lvl) : 0;
    dst[0] = A5XX_TEX_CONST_0_FMT((enum a5xx_tex_fmt) fmt.fmt) |
-            A5XX_TEX_CONST_0_TILE_MODE(TILE5_LINEAR) |
+            A5XX_TEX_CONST_0_TILE_MODE((enum a5xx_tile_mode) tm) |
             COND(util_format_is_srgb(pformat), A5XX_TEX_CONST_0_SRGB) |
             A5XX_TEX_CONST_0_SWIZ_X(A5XX_TEX_X) |
             A5XX_TEX_CONST_0_SWIZ_Y(A5XX_TEX_Y) |

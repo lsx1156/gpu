@@ -451,12 +451,20 @@ tu_image_init(struct tu_device *device, struct tu_image *image,
    enum a6xx_tile_mode tile_mode = TILE6_3;
    bool ubwc_enabled = true;
 
-   /* a5xx(tu5xx)：强制线性、无 UBWC；mip 链布局由 fdl5_layout 计算
-    * （见下方 fdl5_layout 调用），不用 a6xx 的 TILE6_3 布局。 */
+   /* a5xx(tu5xx)：无 UBWC；tiled 只用 TILE5_3（cpp>=4）或 linear。
+    * mip 链布局由 fdl5_layout 计算（见下方调用），tile_mode 只影响对齐。 */
    const bool is_a5xx = device->physical_device->info->chip == 5;
    if (is_a5xx) {
       tile_mode = TILE6_LINEAR;
       ubwc_enabled = false;
+      /* a5xx 的 tile mode 枚举只有 LINEAR(0)/TILE5_2(2)/TILE5_3(3)；
+       * 数值与 TILE6_2/TILE6_3 相同，fdl5_layout 只判断是否为 0。
+       * cpp<4 的 tiled 需要 pitchalign+1，走 linear 更稳（与 fd5 的 ok_format 一致）。 */
+      if (pCreateInfo->tiling == VK_IMAGE_TILING_OPTIMAL) {
+         const enum pipe_format pf0 = tu6_plane_format(image->vk.format, 0);
+         if (util_format_get_blocksize(pf0) >= 4)
+            tile_mode = (enum a6xx_tile_mode) TILE5_3;
+      }
    }
 
    /* use linear tiling if requested */

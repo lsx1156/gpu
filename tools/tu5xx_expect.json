@@ -126,6 +126,26 @@
         {"kind": "regex", "pattern": "REPEAT y=\\s*128 RLE: (?:R x2[0-9] W x2[0-9] ){3}R x2[0-9] W x2[0-9]"},
         {"kind": "regex", "pattern": "MIRROR y=\\s*196 RLE: R x5[0-9] W x5[0-9] R x5[0-9] W x5[0-9]"}
       ]
+    },
+    {
+      "name": "vk_tile",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_tile",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "regex", "pattern": "TILED +128x128 mem=65536"},
+        {"kind": "regex", "pattern": "差异字节=0 最大差=0"},
+        {"kind": "blocks", "expect": [
+          {"rgb": [255, 255, 255], "count": 16384},
+          {"rgb": [255, 0, 0], "count": 16384},
+          {"rgb": [0, 255, 0], "count": 16384},
+          {"rgb": [0, 0, 255], "count": 16384}
+        ]},
+        {"kind": "regex", "pattern": "quad0.*255,255,255"},
+        {"kind": "regex", "pattern": "quad1.*255, +0, +0"},
+        {"kind": "regex", "pattern": "quad3.*0, +0,255"}
+      ]
     }
   ]
 }
