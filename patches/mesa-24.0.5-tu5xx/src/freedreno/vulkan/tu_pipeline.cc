@@ -2597,7 +2597,7 @@ tu6_emit_vertex_input(struct tu_cs *cs,
 
             tu_cs_emit_pkt4(cs, REG_A5XX_VFD_DECODE(loc), 2);
             tu_cs_emit(cs,
-                       A5XX_VFD_DECODE_INSTR_IDX(attr->binding) |
+                       A5XX_VFD_DECODE_INSTR_IDX(loc) |
                        A5XX_VFD_DECODE_INSTR_FORMAT(
                           (enum a5xx_vtx_fmt) format.fmt) |
                        COND(binding->input_rate == VK_VERTEX_INPUT_RATE_INSTANCE,
