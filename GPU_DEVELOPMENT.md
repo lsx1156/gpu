@@ -327,10 +327,19 @@ tu5xx 驱动当前处于「能光栅化但 varying 插值未通」阶段。按�
 |---|---|---|---|
 | **M1.6 / H2 闭环** | 打通 VS→VPC→FS per-vertex varying 递送 | 多彩三角形三顶点 probe R/G/B 全部 OK，平滑渐变 | **✅ 2026-10-20**（根因 VFD_DECODE IDX，见 `work/H2c_vfd_decode_idx.md`） |
 | **M1.7** | 颜色字节序 & MRT 正确性 | 多彩三角形与预期颜色完全一致（含 alpha） | **✅ 2026-10-20**（MRT/alpha/通道序实测通过，见 `work/M1_7_mrt_alpha.md`；GL 双验证待补） |
-| **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | M1.6（纹理基址/descriptor 递送）→ **下一步** |
-| **M2.2** | GMEM/binning 路径 | 大屏渲染帧率与 sysmem 一致或更高，无 fault | M1.6 |
-| **M3.1** | 端到端真实应用（非测试桩） | 用 tu5xx 跑通一个实际交付级应用（如 SDL/Vulkan 简单 3D 场景或 UI） | M2.x |
-| **远期** | angle/GLES 互操作 & Chromium hw 合成 | 复用已验证 GL 通路，Chromium 硬件加速恢复 | M2.x |
+| **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | **✅ 2026-10-20**（2×2 RGBA8 四个 texel 各 10404 像素；根因是 bindless 降级 / STATE_TYPE / 宽高 / LOD 下限四处，见 `work/M2_1_texture.md`） |
+| **M2.2** | 多纹理单元 + 过滤模式 | 多单元各自独立、LINEAR 出现渐变 | **✅ 2026-10-20**（unit = binding 号；binding 0/2 留空 1 验证；见 `work/M2_2_multi_texture.md`） |
+| **M2.3** | mipmap 链 | 四级 LOD 整屏纯色与各级一致 | 门槛项，**下一步** |
+| **M2.4** | 多 descriptor set | 两 set 同 binding 0 各取各的纹理 | M2.3 |
+| **M2.5** | 越界 wrap（REPEAT/MIRROR/BORDER） | 三种模式输出可区分直方图 | M2.2 |
+| **M3.1** | tiled 纹理 | linear/tiled 采样逐像素一致 | M2.x |
+| **M3.2** | GMEM / binning 路径 | 全部探针在 GMEM 下与 sysmem 逐像素一致 | M3.1 |
+| **M3.3** | 端到端真实应用（非测试桩） | 连续 10 分钟无 fault，记录 fps | M2.4 |
+| **远期** | angle/GLES 互操作 & Chromium hw 合成 | 复用已验证 GL 通路，Chromium 硬件加速恢复 | M3.x |
+
+> 详细分解、估时、风险与回退方案见 **`work/ROADMAP.md`**（2026-10-20 版）。
+> 下表早期把「GMEM/binning」编为 M2.2，现已重编号为 M3.2；M2.x 专指纹理链路。
+
 
 **预期风险与依赖项**：
 - varying 递送若最终证明是 VPC/固件不可治硬伤，则 M1.6 可能转向「FS 用 unconsumed vertex data / 纹理替代」绕行路径——列为后备预案，不阻塞图型化平台目标。
