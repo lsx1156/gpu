@@ -8,7 +8,7 @@
 | 目标 | 可行性 | 说明 |
 |---|---|---|
 | 自研 a5xx Vulkan 后端，跑通探针与简单图形程序 | **可行，已过半** | 核心链路（draw / varying / MRT / 纹理）全部真机验证 |
-| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，需 M2.4** | mipmap 已通（M2.3），剩多 set |
+| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，M2.3+M2.4 门槛已过** | 剩 M2.5 wrap 与 M3.x 性能 |
 | 替代 blob 跑真实 3D 游戏 | **不可行** | 需 tiled rendering + 大量 Vulkan 特性，工作量 10× 以上 |
 | 通过 VK-GL-CTS / dEQP | **不可行** | 上万用例，涉及 tiling/barrier/queries/compute/多队列 |
 
@@ -50,7 +50,7 @@
 - 顺带修正：**所有图像布局从 a6xx TILE6_3 改为 a5xx linear**，旧六探针仍逐像素通过（此前是小尺寸巧合）。
 - 详见 `work/M2_3_mipmap.md`；回归 `vk_mip` 已入期望表（7/7）。
 
-### M2.4 多 descriptor set（1–2 天）**← 下一步**
+### M2.4 多 descriptor set ✅ 2026-10-20
 - 目标：两个 set 都用 binding 0 时不再撞号。
 - 主方案（不依赖 layout 前缀和）：`unit = set * TU5XX_UNITS_PER_SET + binding`，
   `TU5XX_UNITS_PER_SET = 8`，总单元上限 16（`TPL1_FS_TEX_COUNT` 的小整数要求）。
@@ -60,7 +60,16 @@
 - 验收：两 set 各含 binding0 的 2×2 纹理（四色不同），FS 左右半屏各取一个 set，四块颜色正确；
   再加 `vk_tex2` 原例（单 set，binding 0/2）回归不退化。
 
-### M2.5 越界 wrap 语义（0.5–1 天）
+### M2.4 结论摘要
+
+- a5xx 的 `TEX/SAMP` 是立即数单元号，与 Vulkan 的 `(set,binding)` 不是同一编号空间；两边都必须用
+  **`unit = set*8 + binding`**（`TU5XX_UNITS_PER_SET=8`，共 16 单元）。
+- 着色器侧新增 `tu5xx_lower_samplers()`（照 `nir_lower_samplers.c` 改 `base_index` 公式），替换通用 pass。
+- 状态块侧 `tu5xx_emit_textures` 同公式，`binding>=8` 会打 warning（跨窗口）。
+- 上限：每 set 8 绑定、最多 2 set。`pDynamicOffsets`、UBO/storage、push descriptor 未支持。
+- 详见 `work/M2_4_multi_set.md`；回归 `vk_set` 已入期望表（8/8）。
+
+### M2.5 越界 wrap 语义（0.5–1 天）**← 下一步**
 - 目标：REPEAT / MIRROR_REPEAT / CLAMP_TO_BORDER 在 uv ∉ [0,1] 时正确。
 - 做法：探针把 uv 乘 2（新增 SPIR-V 模式 `tex2x2repeat`，`OpFMul` + float 常量 2.0），
   2×2 纹理平铺成 4×4 色块；CLAMP 会拉边、REPEAT 会重复、MIRROR 会镜像，三者直方图形态不同。
@@ -105,7 +114,7 @@
 |---|---|---|---|
 | 1 | M2.0 回归套件 | 0.5 天 | 回退一处能被脚本抓到 |
 | 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
-| 3 | M2.4 多 set | 1–2 天 | 两 set 同 binding 0 各取各的纹理 |
+| 3 | M2.4 多 set ✅ | 实际 0.5 天 | 左 20808/右 20808 双色；退回 binding-only 编号 → 单色 41616 反证 |
 | 4 | M2.5 越界 wrap | 0.5–1 天 | 三套可区分直方图 |
 | 5 | M3.1 tiled 纹理 | 3–5 天 | linear/tiled 采样一致性 |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |

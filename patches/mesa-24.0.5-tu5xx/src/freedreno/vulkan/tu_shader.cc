@@ -7,6 +7,7 @@
 
 #include "spirv/nir_spirv.h"
 #include "util/mesa-sha1.h"
+#include "nir/nir_builder.h"
 #include "nir/nir_xfb_info.h"
 #include "vk_nir.h"
 #include "vk_nir_convert_ycbcr.h"
@@ -546,6 +547,107 @@ lower_tex_ycbcr(const struct tu_pipeline_layout *layout,
    builder->cursor = nir_before_instr(&tex->instr);
 }
 
+/* ---- tu5xx: 固定纹理单元号 ----
+ * a5xx 的 cat5 指令里 TEX/SAMP 是立即数单元号，硬件按「单元号」索引 TPL1 状态块。
+ * 通用 nir_lower_samplers 用 base_index = var->data.binding，多 descriptor set 时
+ * 两个 set 的 binding 0 会撞到同一个单元。这里改成
+ *     base_index = var->data.descriptor_set * TU5XX_UNITS_PER_SET + var->data.binding
+ * 与 tu_cmd_buffer.cc 的 DST_OFF 公式严格一致。
+ */
+static void
+tu5xx_lower_tex_src_to_offset(nir_builder *b, nir_tex_instr *instr, unsigned src_idx)
+{
+   nir_def *index = NULL;
+   unsigned base_index = 0;
+   unsigned array_elements = 1;
+   nir_tex_src *src = &instr->src[src_idx];
+   bool is_sampler = src->src_type == nir_tex_src_sampler_deref;
+
+   nir_deref_instr *deref = nir_instr_as_deref(src->src.ssa->parent_instr);
+   while (deref->deref_type != nir_deref_type_var) {
+      nir_deref_instr *parent = nir_instr_as_deref(deref->parent.ssa->parent_instr);
+
+      assert(deref->deref_type == nir_deref_type_array);
+
+      if (nir_src_is_const(deref->arr.index) && index == NULL) {
+         unsigned index_in_array = nir_src_as_uint(deref->arr.index);
+         if (index_in_array < glsl_array_size(parent->type)) {
+            base_index += index_in_array * array_elements;
+         } else {
+            base_index = glsl_array_size(parent->type) - 1;
+         }
+      } else {
+         if (index == NULL) {
+            index = nir_imm_int(b, base_index);
+            base_index = 0;
+         }
+         index = nir_iadd(b, index,
+                          nir_imul_imm(b, deref->arr.index.ssa, array_elements));
+      }
+
+      array_elements *= glsl_get_length(parent->type);
+      deref = parent;
+   }
+
+   if (index)
+      index = nir_umin(b, index, nir_imm_int(b, array_elements - 1));
+
+   assert(deref->deref_type == nir_deref_type_var);
+
+   /* 窗口化编号：set*8 + binding（数组元素顺延，不得跨出本 set 的窗口） */
+   base_index += deref->var->data.descriptor_set * TU5XX_UNITS_PER_SET +
+                 deref->var->data.binding;
+   if (index)
+      index = nir_imin(b, index,
+                       nir_imm_int(b, TU5XX_UNITS_PER_SET -
+                                      (int)deref->var->data.binding - 1));
+   base_index = MIN2(base_index, TU5XX_MAX_TEX - 1);
+
+   if (index) {
+      nir_src_rewrite(&src->src, index);
+      src->src_type = is_sampler ? nir_tex_src_sampler_offset
+                                 : nir_tex_src_texture_offset;
+   } else {
+      nir_tex_instr_remove_src(instr, src_idx);
+   }
+
+   if (is_sampler) {
+      instr->sampler_index = base_index;
+   } else {
+      instr->texture_index = base_index;
+   }
+}
+
+static bool
+tu5xx_lower_sampler_instr(nir_builder *b, nir_instr *instr_, void *cb_data)
+{
+   if (instr_->type != nir_instr_type_tex)
+      return false;
+
+   nir_tex_instr *instr = nir_instr_as_tex(instr_);
+
+   int texture_idx = nir_tex_instr_src_index(instr, nir_tex_src_texture_deref);
+   if (texture_idx >= 0) {
+      b->cursor = nir_before_instr(&instr->instr);
+      tu5xx_lower_tex_src_to_offset(b, instr, texture_idx);
+   }
+
+   int sampler_idx = nir_tex_instr_src_index(instr, nir_tex_src_sampler_deref);
+   if (sampler_idx >= 0)
+      tu5xx_lower_tex_src_to_offset(b, instr, sampler_idx);
+
+   return texture_idx >= 0 || sampler_idx >= 0;
+}
+
+static bool
+tu5xx_lower_samplers(nir_shader *shader)
+{
+   return nir_shader_instructions_pass(shader, tu5xx_lower_sampler_instr,
+                                       nir_metadata_block_index |
+                                          nir_metadata_dominance,
+                                       NULL);
+}
+
 static bool
 lower_tex(nir_builder *b, nir_tex_instr *tex, struct tu_device *dev,
           struct tu_shader *shader, const struct tu_pipeline_layout *layout)
@@ -874,10 +976,10 @@ tu_lower_io(nir_shader *shader, struct tu_device *dev,
                                             &params);
 
    /* tu5xx: a5xx 走固定单元号路径。lower_tex 已为 chip==5 跳过 deref→handle，
-    * 这里用通用 pass 把剩余 deref 转成 texture_index/sampler_index
-    * （base_index = var->data.binding，见 nir_lower_samplers.c）。 */
+    * 这里把剩余 deref 转成 texture_index/sampler_index，
+    * 编号 = set*TU5XX_UNITS_PER_SET + binding（多 set 不撞车）。 */
    if (dev->physical_device->info->chip == 5)
-      progress |= nir_lower_samplers(shader);
+      progress |= tu5xx_lower_samplers(shader);
 
    /* Remove now-unused variables so that when we gather the shader info later
     * they won't be counted.

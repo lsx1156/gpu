@@ -5298,7 +5298,6 @@ tu6_emit_fs_params(struct tu_cmd_buffer *cmd)
  * 状态经 CP_LOAD_STATE4 直接推进 TPL1 状态块（与 fd5 emit_textures 同构）。
  * 描述符槽里已经是 a5xx 的 12 dword 纹理常量 + 4 dword 采样器格式
  * （见 tu_descriptor_set.cc: tu5xx_write_tex_descriptor）。 */
-#define TU5XX_MAX_TEX 16
 
 static void
 tu5xx_emit_textures(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
@@ -5320,7 +5319,13 @@ tu5xx_emit_textures(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
          if (bl->type != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             continue;
          for (uint32_t a = 0; a < bl->array_size; a++) {
-            uint32_t unit = b + a;
+            /* 多 set：unit = set*8 + binding（见 tu_descriptor_set.h） */
+            uint32_t unit = s * TU5XX_UNITS_PER_SET + b + a;
+            if (b >= TU5XX_UNITS_PER_SET) {
+               /* 窗口 8 个单元/set：binding >= 8 会跨进下一个 set 的窗口 */
+               fprintf(stderr, "tu5xx: set=%u binding=%u 超出每 set %u 个单元窗口，编号可能撞车\n",
+                       s, b, TU5XX_UNITS_PER_SET);
+            }
             if (unit >= TU5XX_MAX_TEX) {
                fprintf(stderr, "tu5xx: 纹理单元 %u 超出上限 %u，丢弃\n",
                        unit, TU5XX_MAX_TEX);

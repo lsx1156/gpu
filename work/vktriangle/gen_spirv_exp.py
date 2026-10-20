@@ -413,7 +413,7 @@ def build_fs_tex2():
     return s
 
 
-def build_fs_lod(lod_bits):
+def build_fs_lod(lod_bits, set_no=0):
     """FS: 采样一张 mip 链纹理，使用显式 LOD
     OpImageSampleExplicitLod(0x0058) + ImageOperands mask=0x2 (Lod)。
     """
@@ -429,7 +429,7 @@ def build_fs_lod(lod_bits):
     s.inst(0x0010, [main_id, 7])
     s.inst(0x0047, [out_col, 30, 0])
     s.inst(0x0047, [in_col, 30, 0])
-    s.inst(0x0047, [tex_var, 34, 0])      # DescriptorSet 0
+    s.inst(0x0047, [tex_var, 34, set_no])      # DescriptorSet 0
     s.inst(0x0047, [tex_var, 33, 0])      # Binding 0
 
     s.inst(0x0013, [t_void])
@@ -489,6 +489,15 @@ MODES = {
 if __name__ == '__main__':
     mode = sys.argv[1]
     out = sys.argv[2]
+    if mode == 'set2':
+        txt = ("/* spirv_set2.h - gen_spirv_exp.py mode=set2 */\n#include <stdint.h>\n\n"
+               + emit_c("vs_spv", build_vs_base()) + "\n\n"
+               + emit_c("fs_spv_set0", build_fs_lod(0x00000000, 0)) + "\n\n"
+               + emit_c("fs_spv_set1", build_fs_lod(0x00000000, 1)) + "\n\n")
+        with open(out, "w", newline="\n") as f:
+            f.write(txt)
+        print("wrote %s (mode=set2, set0/set1 同 binding 0)" % out)
+        sys.exit(0)
     if mode == 'lod':
         txt = ("/* spirv_lod.h - gen_spirv_exp.py mode=lod */\n#include <stdint.h>\n\n"
                + emit_c("vs_spv", build_vs_base()) + "\n\n")

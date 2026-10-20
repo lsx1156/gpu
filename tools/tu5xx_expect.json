@@ -98,6 +98,21 @@
         {"kind": "rgba", "marker": "quad2(LOD2)", "rgba": [50, 70, 220, 255], "tol": 2},
         {"kind": "rgba", "marker": "quad3(LOD3)", "rgba": [230, 200, 40, 255], "tol": 2}
       ]
+    },
+    {
+      "name": "vk_set",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_set",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "blocks", "expect": [
+          {"rgb": [10, 200, 90], "count": 20808},
+          {"rgb": [200, 60, 10], "count": 20808}
+        ]},
+        {"kind": "rgba", "marker": "left(set0)", "rgba": [10, 200, 90, 255], "tol": 2},
+        {"kind": "rgba", "marker": "right(set1)", "rgba": [200, 60, 10, 255], "tol": 2}
+      ]
     }
   ]
 }
