@@ -61,6 +61,7 @@
   - H2c 完成：VPC/SP 关键位对齐 fd5，非根因
   - H2b 完成：隔离实验证明输出/读回与 varying 递送均正常
   - **根因**：a5xx `VFD_DECODE[].IDX` 用了 vertex binding 而非属性槽位，交错缓冲下颜色属性整份读到位置数据；改 `IDX(loc)` 后插值与解析预测逐点吻合（±1 LSB）
+- **M1.7（完成，2026-10-20）**：颜色字节序 / alpha / 双颜色附件（MRT）实测通过，驱动侧无需改动；细节见 `work/M1_7_mrt_alpha.md`
 
 详细里程碑说明见 [`GPU_DEVELOPMENT.md`](GPU_DEVELOPMENT.md) 相应章节。
 

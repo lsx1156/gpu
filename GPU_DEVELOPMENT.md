@@ -325,9 +325,9 @@ tu5xx 驱动当前处于「能光栅化但 varying 插值未通」阶段。按�
 
 | 里程碑 | 目标 | 验收标准 | 依赖 |
 |---|---|---|---|
-| **M1.6 / H2 闭环** | 打通 VS→VPC→FS per-vertex varying 递送 | 多彩三角形三顶点 probe R/G/B 全部 OK，平滑渐变 | 当前进行中（H2b） |
-| **M1.7** | 颜色字节序 & MRT 正确性 | 多彩三角形与预期颜色完全一致（含 alpha），GL/GLES 双验证 | M1.6 |
-| **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | M1.6（纹理基址/descriptor 递送） |
+| **M1.6 / H2 闭环** | 打通 VS→VPC→FS per-vertex varying 递送 | 多彩三角形三顶点 probe R/G/B 全部 OK，平滑渐变 | **✅ 2026-10-20**（根因 VFD_DECODE IDX，见 `work/H2c_vfd_decode_idx.md`） |
+| **M1.7** | 颜色字节序 & MRT 正确性 | 多彩三角形与预期颜色完全一致（含 alpha） | **✅ 2026-10-20**（MRT/alpha/通道序实测通过，见 `work/M1_7_mrt_alpha.md`；GL 双验证待补） |
+| **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | M1.6（纹理基址/descriptor 递送）→ **下一步** |
 | **M2.2** | GMEM/binning 路径 | 大屏渲染帧率与 sysmem 一致或更高，无 fault | M1.6 |
 | **M3.1** | 端到端真实应用（非测试桩） | 用 tu5xx 跑通一个实际交付级应用（如 SDL/Vulkan 简单 3D 场景或 UI） | M2.x |
 | **远期** | angle/GLES 互操作 & Chromium hw 合成 | 复用已验证 GL 通路，Chromium 硬件加速恢复 | M2.x |

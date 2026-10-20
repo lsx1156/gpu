@@ -215,6 +215,92 @@ def build_vs_base():
     return s
 
 
+def build_fs_alpha_half():
+    """FS: 读 varying -> vec4(col.xyz, 0.5)  (验 alpha 写入)"""
+    s = Spirv()
+    main_id = s.id(); out_col = s.id(); in_col = s.id()
+    t_void = s.id(); t_fn = s.id(); t_f32 = s.id(); t_v3 = s.id(); t_v4 = s.id()
+    p_out_v4 = s.id(); p_in_v3 = s.id(); c_half = s.id()
+
+    s.inst(0x0011, [1])
+    s.inst(0x000E, [0, 1])
+    s.inst(0x000F, [4, main_id, b"main", out_col, in_col])
+    s.inst(0x0010, [main_id, 7])
+    s.inst(0x0047, [out_col, 30, 0])
+    s.inst(0x0047, [in_col, 30, 0])
+
+    s.inst(0x0013, [t_void])
+    s.inst(0x0021, [t_fn, t_void])
+    s.inst(0x0016, [t_f32, 32])
+    s.inst(0x0017, [t_v3, t_f32, 3])
+    s.inst(0x0017, [t_v4, t_f32, 4])
+    s.inst(0x0020, [p_out_v4, 3, t_v4])
+    s.inst(0x0020, [p_in_v3, 1, t_v3])
+    s.inst(0x002B, [t_f32, c_half, 0x3F000000])
+
+    s.inst(0x003B, [p_out_v4, out_col, 3])
+    s.inst(0x003B, [p_in_v3, in_col, 1])
+
+    lbl = s.id(); col = s.id(); cv = s.id()
+    s.inst(0x0036, [t_void, main_id, 0, t_fn])
+    s.inst(0x00F8, [lbl])
+    s.inst(0x003D, [t_v3, col, in_col])
+    s.inst(0x0050, [t_v4, cv, col, c_half])
+    s.inst(0x003E, [out_col, cv])
+    s.inst(0x00FD, [])
+    s.inst(0x0038, [])
+    return s
+
+
+def build_fs_mrt2():
+    """FS: 两个颜色输出
+    loc0 = vec4(col.rgb, 1.0)
+    loc1 = vec4(col.b, col.g, col.r, 1.0)   (R/B 置换 -- 用于鉴别 MRT 路由)
+    """
+    s = Spirv()
+    main_id = s.id(); out0 = s.id(); out1 = s.id(); in_col = s.id()
+    t_void = s.id(); t_fn = s.id(); t_f32 = s.id(); t_v3 = s.id(); t_v4 = s.id()
+    p_out_v4 = s.id(); p_in_v3 = s.id(); c_one = s.id()
+
+    s.inst(0x0011, [1])
+    s.inst(0x000E, [0, 1])
+    s.inst(0x000F, [4, main_id, b"main", out0, out1, in_col])
+    s.inst(0x0010, [main_id, 7])
+    s.inst(0x0047, [out0, 30, 0])
+    s.inst(0x0047, [out1, 30, 1])
+    s.inst(0x0047, [in_col, 30, 0])
+
+    s.inst(0x0013, [t_void])
+    s.inst(0x0021, [t_fn, t_void])
+    s.inst(0x0016, [t_f32, 32])
+    s.inst(0x0017, [t_v3, t_f32, 3])
+    s.inst(0x0017, [t_v4, t_f32, 4])
+    s.inst(0x0020, [p_out_v4, 3, t_v4])
+    s.inst(0x0020, [p_in_v3, 1, t_v3])
+    s.inst(0x002B, [t_f32, c_one, 0x3F800000])
+
+    s.inst(0x003B, [p_out_v4, out0, 3])
+    s.inst(0x003B, [p_out_v4, out1, 3])
+    s.inst(0x003B, [p_in_v3, in_col, 1])
+
+    lbl = s.id(); col = s.id()
+    cx = s.id(); cy = s.id(); cz = s.id()
+    v0 = s.id(); v1 = s.id()
+    s.inst(0x0036, [t_void, main_id, 0, t_fn])
+    s.inst(0x00F8, [lbl])
+    s.inst(0x003D, [t_v3, col, in_col])
+    s.inst(0x0051, [t_f32, cx, col, 0])
+    s.inst(0x0051, [t_f32, cy, col, 1])
+    s.inst(0x0051, [t_f32, cz, col, 2])
+    s.inst(0x0050, [t_v4, v0, cx, cy, cz, c_one])
+    s.inst(0x0050, [t_v4, v1, cz, cy, cx, c_one])
+    s.inst(0x003E, [out0, v0])
+    s.inst(0x003E, [out1, v1])
+    s.inst(0x00FD, [])
+    s.inst(0x0038, [])
+    return s
+
+
 def emit_c(name, s):
     ws = s.header() + s.words
     lines = ["static const uint32_t %s[] = {" % name]
@@ -228,6 +314,8 @@ MODES = {
     'fs_const_blue': (build_vs_base, build_fs_const_blue),
     'vs_const_blue': (build_vs_const_blue, build_fs_from_base),
     'base': (build_vs_base, build_fs_from_base),
+    'alpha_half': (build_vs_base, build_fs_alpha_half),
+    'mrt2': (build_vs_base, build_fs_mrt2),
 }
 
 if __name__ == '__main__':
