@@ -378,7 +378,7 @@ int main(void)
     CHK(vkMapMemory(dev, rt_mem, 0, VK_WHOLE_SIZE, 0, &im), "vkMapMemory(rb)");
     unsigned nonbg = 0;
     unsigned hist_n = 0;
-    struct { uint8_t r, g, b; unsigned cnt; int x0, x1, y0, y1; } hist[8];
+    struct { uint8_t r, g, b; unsigned cnt; int x0, x1, y0, y1; } hist[64];
     memset(hist, 0, sizeof hist);
     for (uint32_t y = 0; y < H; y++) {
         uint8_t *row = (uint8_t *)im + srl.offset + y * srl.rowPitch;
@@ -389,13 +389,13 @@ int main(void)
             unsigned k;
             for (k = 0; k < hist_n; k++)
                 if (hist[k].r == px[0] && hist[k].g == px[1] && hist[k].b == px[2]) break;
-            if (k == hist_n && hist_n < 8) {
+            if (k == hist_n && hist_n < 64) {
                 hist[k].r = px[0]; hist[k].g = px[1]; hist[k].b = px[2];
                 hist[k].x0 = hist[k].x1 = (int)x;
                 hist[k].y0 = hist[k].y1 = (int)y;
                 hist_n++;
             }
-            if (k < 8) {
+            if (k < 64) {
                 hist[k].cnt++;
                 if ((int)x < hist[k].x0) hist[k].x0 = (int)x;
                 if ((int)x > hist[k].x1) hist[k].x1 = (int)x;

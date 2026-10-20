@@ -5303,70 +5303,72 @@ tu6_emit_fs_params(struct tu_cmd_buffer *cmd)
 static void
 tu5xx_emit_textures(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
 {
-   const uint32_t *tex[TU5XX_MAX_TEX];
-   const uint32_t *samp[TU5XX_MAX_TEX];
-   uint32_t n = 0;
+   /* a5xx 的着色器里 tex/samp 是立即数单元号，来源 = SPIR-V binding 号
+    * （tu_shader.cc 的 chip==5 路径跑 nir_lower_samplers，base_index =
+    * var->data.binding）。因此状态块的单元号必须等于 binding 号，而不是
+    * 「第几个纹理描述符」——binding 之间可能夹着 UBO 等其他类型。
+    * 所以逐单元发 NUM_UNIT=1 的包，DST_OFF = binding 号。 */
+   uint32_t tex_count = 0;
 
-   for (uint32_t s = 0; s < MAX_SETS && n < TU5XX_MAX_TEX; s++) {
+   for (uint32_t s = 0; s < MAX_SETS; s++) {
       const struct tu_descriptor_set *set = cmd->descriptors[0].sets[s];
       if (!set || !set->layout)
          continue;
       const struct tu_descriptor_set_layout *sl = set->layout;
-      for (uint32_t b = 0; b < sl->binding_count && n < TU5XX_MAX_TEX; b++) {
+      for (uint32_t b = 0; b < sl->binding_count; b++) {
          const struct tu_descriptor_set_binding_layout *bl = &sl->binding[b];
          if (bl->type != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             continue;
-         for (uint32_t a = 0; a < bl->array_size && n < TU5XX_MAX_TEX; a++, n++) {
+         for (uint32_t a = 0; a < bl->array_size; a++) {
+            uint32_t unit = b + a;
+            if (unit >= TU5XX_MAX_TEX) {
+               fprintf(stderr, "tu5xx: 纹理单元 %u 超出上限 %u，丢弃\n",
+                       unit, TU5XX_MAX_TEX);
+               continue;
+            }
             const uint32_t *d = set->mapped_ptr + (bl->offset + a * bl->size) / 4;
-            tex[n] = d;
-            samp[n] = d + A6XX_TEX_CONST_DWORDS;
+            const uint32_t *smp = d + A6XX_TEX_CONST_DWORDS;
+
             if (getenv("TU5XX_TEX_DEBUG")) {
                fprintf(stderr,
-                       "tu5xx tex[%u] set=%u bind=%u off=%u ptr=%p: %08x %08x %08x %08x "
-                       "%08x %08x | samp %08x %08x %08x %08x\n",
-                       n, s, b, bl->offset, (void *) d, d[0], d[1], d[2], d[3],
-                       d[4], d[5], d[16], d[17], d[18], d[19]);
+                       "tu5xx tex unit=%u set=%u bind=%u off=%u: %08x %08x %08x "
+                       "%08x %08x %08x | samp %08x %08x %08x %08x\n",
+                       unit, s, b, bl->offset, d[0], d[1], d[2], d[3], d[4], d[5],
+                       smp[0], smp[1], smp[2], smp[3]);
             }
+
+            /* 采样器：4 dword/unit */
+            tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + A6XX_TEX_SAMP_DWORDS);
+            tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(unit) |
+                           CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
+                           CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
+                           CP_LOAD_STATE4_0_NUM_UNIT(1));
+            tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_SHADER) |
+                           CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
+            tu_cs_emit(cs, 0);
+            for (uint32_t j = 0; j < A6XX_TEX_SAMP_DWORDS; j++)
+               tu_cs_emit(cs, smp[j]);
+
+            /* 纹理常量：12 dword/unit（STATE_TYPE = ST4_CONSTANTS） */
+            tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + 12);
+            tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(unit) |
+                           CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
+                           CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
+                           CP_LOAD_STATE4_0_NUM_UNIT(1));
+            tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_CONSTANTS) |
+                           CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
+            tu_cs_emit(cs, 0);
+            for (uint32_t j = 0; j < 12; j++)
+               tu_cs_emit(cs, d[j]);
+
+            if (unit + 1 > tex_count)
+               tex_count = unit + 1;
          }
       }
    }
 
-   if (n == 0) {
-      tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_FS_TEX_COUNT, 1);
-      tu_cs_emit(cs, 0);
-      return;
-   }
-
-   /* 采样器：4 dword/unit */
-   tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + A6XX_TEX_SAMP_DWORDS * n);
-   tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(0) |
-                  CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
-                  CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
-                  CP_LOAD_STATE4_0_NUM_UNIT(n));
-   tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_SHADER) |
-                  CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
-   tu_cs_emit(cs, 0);
-   for (uint32_t i = 0; i < n; i++) {
-      for (uint32_t j = 0; j < A6XX_TEX_SAMP_DWORDS; j++)
-         tu_cs_emit(cs, samp[i] ? samp[i][j] : 0);
-   }
-
-   /* 纹理常量：前 12 dword（STATE_TYPE = ST4_CONSTANTS，与采样器不同！） */
-   tu_cs_emit_pkt7(cs, CP_LOAD_STATE4, 3 + 12 * n);
-   tu_cs_emit(cs, CP_LOAD_STATE4_0_DST_OFF(0) |
-                  CP_LOAD_STATE4_0_STATE_SRC(SS4_DIRECT) |
-                  CP_LOAD_STATE4_0_STATE_BLOCK(SB4_FS_TEX) |
-                  CP_LOAD_STATE4_0_NUM_UNIT(n));
-   tu_cs_emit(cs, CP_LOAD_STATE4_1_STATE_TYPE(ST4_CONSTANTS) |
-                  CP_LOAD_STATE4_1_EXT_SRC_ADDR(0));
-   tu_cs_emit(cs, 0);
-   for (uint32_t i = 0; i < n; i++) {
-      for (uint32_t j = 0; j < 12; j++)
-         tu_cs_emit(cs, tex[i] ? tex[i][j] : 0);
-   }
-
    tu_cs_emit_pkt4(cs, REG_A5XX_TPL1_FS_TEX_COUNT, 1);
-   tu_cs_emit(cs, n);
+   tu_cs_emit(cs, tex_count);
 }
 
 template <chip CHIP>

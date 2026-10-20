@@ -301,6 +301,118 @@ def build_fs_mrt2():
     return s
 
 
+def build_fs_tex2x2():
+    """FS: 采样一张 2D 纹理
+    in_col(vec3 顶点色当 uv) -> uv = col.xy -> texel -> out_col
+    """
+    s = Spirv()
+    main_id = s.id(); out_col = s.id(); in_col = s.id(); tex_var = s.id()
+    t_void = s.id(); t_fn = s.id(); t_f32 = s.id(); t_v3 = s.id(); t_v4 = s.id()
+    t_v2 = s.id(); t_img = s.id(); t_samp = s.id(); t_simg = s.id()
+    p_out = s.id(); p_in = s.id(); p_simg = s.id()
+
+    s.inst(0x0011, [1])
+    s.inst(0x000E, [0, 1])
+    s.inst(0x000F, [4, main_id, b"main", out_col, in_col, tex_var])
+    s.inst(0x0010, [main_id, 7])
+    s.inst(0x0047, [out_col, 30, 0])
+    s.inst(0x0047, [in_col, 30, 0])
+    s.inst(0x0047, [tex_var, 34, 0])      # DescriptorSet 0
+    s.inst(0x0047, [tex_var, 33, 0])      # Binding 0
+
+    s.inst(0x0013, [t_void])
+    s.inst(0x0021, [t_fn, t_void])
+    s.inst(0x0016, [t_f32, 32])
+    s.inst(0x0017, [t_v3, t_f32, 3])
+    s.inst(0x0017, [t_v4, t_f32, 4])
+    s.inst(0x0017, [t_v2, t_f32, 2])
+    # OpTypeImage: sampled type, Dim=1(2D), Depth=0, Arrayed=0, MS=0, Sampled=1, Format=0
+    s.inst(0x0019, [t_img, t_f32, 1, 0, 0, 0, 1, 0])
+    s.inst(0x001A, [t_samp])
+    s.inst(0x001B, [t_simg, t_img])
+    s.inst(0x0020, [p_out, 3, t_v4])
+    s.inst(0x0020, [p_in, 1, t_v3])
+    s.inst(0x0020, [p_simg, 0, t_simg])
+    s.inst(0x003B, [p_out, out_col, 3])
+    s.inst(0x003B, [p_in, in_col, 1])
+    s.inst(0x003B, [p_simg, tex_var, 0])
+
+    lbl = s.id(); col = s.id(); uv = s.id()
+    si = s.id(); texel = s.id()
+    s.inst(0x0036, [t_void, main_id, 0, t_fn])
+    s.inst(0x00F8, [lbl])
+    s.inst(0x003D, [t_v3, col, in_col])
+    s.inst(0x004F, [t_v2, uv, col, col, 0, 1])         # OpVectorShuffle -> xy
+    s.inst(0x003D, [t_simg, si, tex_var])              # OpLoad sampled image
+    s.inst(0x0057, [t_v4, texel, si, uv])              # OpImageSampleImplicitLod
+    s.inst(0x003E, [out_col, texel])
+    s.inst(0x00FD, [])
+    s.inst(0x0038, [])
+    return s
+
+
+def build_fs_tex2():
+    """FS: 同时采样两张纹理（binding 0/1），按 uv.x<0.5 选边
+    左半屏 = binding0 的 texel，右半屏 = binding1 的 texel
+    用来验证多单元状态块（unit = binding 号）是否各自独立。
+    """
+    s = Spirv()
+    main_id = s.id(); out_col = s.id(); in_col = s.id()
+    tex_a = s.id(); tex_b = s.id()
+    t_void = s.id(); t_fn = s.id(); t_f32 = s.id(); t_v3 = s.id(); t_v4 = s.id()
+    t_v2 = s.id(); t_img = s.id(); t_samp = s.id(); t_simg = s.id(); t_bool = s.id()
+    p_out = s.id(); p_in = s.id(); p_simg = s.id(); c_half = s.id()
+
+    s.inst(0x0011, [1])
+    s.inst(0x000E, [0, 1])
+    s.inst(0x000F, [4, main_id, b"main", out_col, in_col, tex_a, tex_b])
+    s.inst(0x0010, [main_id, 7])
+    s.inst(0x0047, [out_col, 30, 0])
+    s.inst(0x0047, [in_col, 30, 0])
+    s.inst(0x0047, [tex_a, 34, 0])        # DescriptorSet 0
+    s.inst(0x0047, [tex_a, 33, 0])        # Binding 0
+    s.inst(0x0047, [tex_b, 34, 0])
+    s.inst(0x0047, [tex_b, 33, 2])        # Binding 2（故意留空 binding 1）
+
+    s.inst(0x0013, [t_void])
+    s.inst(0x0021, [t_fn, t_void])
+    s.inst(0x0016, [t_f32, 32])
+    s.inst(0x0014, [t_bool])
+    s.inst(0x0017, [t_v3, t_f32, 3])
+    s.inst(0x0017, [t_v4, t_f32, 4])
+    s.inst(0x0017, [t_v2, t_f32, 2])
+    s.inst(0x0019, [t_img, t_f32, 1, 0, 0, 0, 1, 0])
+    s.inst(0x001A, [t_samp])
+    s.inst(0x001B, [t_simg, t_img])
+    s.inst(0x002B, [t_f32, c_half, 0x3F000000])   # OpConstant 0.5f
+    s.inst(0x0020, [p_out, 3, t_v4])
+    s.inst(0x0020, [p_in, 1, t_v3])
+    s.inst(0x0020, [p_simg, 0, t_simg])
+    s.inst(0x003B, [p_out, out_col, 3])
+    s.inst(0x003B, [p_in, in_col, 1])
+    s.inst(0x003B, [p_simg, tex_a, 0])
+    s.inst(0x003B, [p_simg, tex_b, 0])
+
+    lbl = s.id(); col = s.id(); uv = s.id(); ux = s.id()
+    si_a = s.id(); si_b = s.id(); ta = s.id(); tb = s.id()
+    cmp = s.id(); res = s.id()
+    s.inst(0x0036, [t_void, main_id, 0, t_fn])
+    s.inst(0x00F8, [lbl])
+    s.inst(0x003D, [t_v3, col, in_col])
+    s.inst(0x004F, [t_v2, uv, col, col, 0, 1])
+    s.inst(0x0051, [t_f32, ux, uv, 0])             # OpCompositeExtract uv.x
+    s.inst(0x003D, [t_simg, si_a, tex_a])
+    s.inst(0x003D, [t_simg, si_b, tex_b])
+    s.inst(0x0057, [t_v4, ta, si_a, uv])           # 采样 unit 0
+    s.inst(0x0057, [t_v4, tb, si_b, uv])           # 采样 unit 1
+    s.inst(0x00B8, [t_bool, cmp, ux, c_half])      # ux < 0.5
+    s.inst(0x00A9, [t_v4, res, cmp, ta, tb])       # OpSelect
+    s.inst(0x003E, [out_col, res])
+    s.inst(0x00FD, [])
+    s.inst(0x0038, [])
+    return s
+
+
 def emit_c(name, s):
     ws = s.header() + s.words
     lines = ["static const uint32_t %s[] = {" % name]
@@ -316,6 +428,8 @@ MODES = {
     'base': (build_vs_base, build_fs_from_base),
     'alpha_half': (build_vs_base, build_fs_alpha_half),
     'mrt2': (build_vs_base, build_fs_mrt2),
+    'tex2x2': (build_vs_base, build_fs_tex2x2),
+    'tex2': (build_vs_base, build_fs_tex2),
 }
 
 if __name__ == '__main__':
