@@ -2559,6 +2559,8 @@ tu_DestroyDevice(VkDevice _device, const VkAllocationCallbacks *pAllocator)
 
    tu_breadcrumbs_finish(device);
 
+   tu5xx_cpu_readback_free_all(device);
+
    u_trace_context_fini(&device->trace_context);
 
    for (unsigned i = 0; i < ARRAY_SIZE(device->scratch_bos); i++) {
@@ -2874,6 +2876,9 @@ tu_MapMemory(VkDevice _device,
       *ppData = NULL;
       return VK_SUCCESS;
    }
+
+   /* 芯片 5：先把挂起的 image->buffer CPU 读回补上（应用通常在此前已等过 fence） */
+   tu5xx_cpu_readback_drain(device);
 
    if (!mem->bo->map) {
       result = tu_bo_map(device, mem->bo);

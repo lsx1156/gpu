@@ -244,9 +244,14 @@ enum tu_gralloc_type
 
 struct tu_virtio_device;
 
+struct tu5xx_cpu_copy;
+
 struct tu_device
 {
    struct vk_device vk;
+
+   /* 芯片 5：待执行的 image->buffer CPU 读回（见 tu_clear_blit.c） */
+   struct tu5xx_cpu_copy *pending_readbacks;
    struct tu_instance *instance;
 
    struct tu_queue *queues[TU_MAX_QUEUE_FAMILIES];

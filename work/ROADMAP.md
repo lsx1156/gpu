@@ -84,7 +84,7 @@
 - 未测：`BORDER`（缺 borderColor 通路）、`MIRROR_CLAMP_TO_EDGE`、各向异性、shadow compare。
 - 详见 `work/M2_5_wrap.md`；回归 `vk_wrap` 已入期望表（9/9）。
 
-### M3.1 tiled 纹理（第一段 ✅ 2026-10-20；第二段：上传 ✅ / 读回 ❌）
+### M3.1 tiled 纹理（第一段 ✅ 2026-10-20；第二段 上传 ✅；第三段 读回 ✅）
 - 目标：`VK_IMAGE_TILING_OPTIMAL` 走 tiled layout（TILE5_3 或等价），linear 仅作回退。
 - 前置：`fdl/freedreno_layout.h` 的 tile 描述 + `fd5_texture.c` 的 TILE_MODE/SWAP/UBWC 选择。
 - 验收：同一张 64×64 纹理分别以 linear/tiled 上传，采样结果逐像素相同（用 CRC/直方图对比）；
@@ -113,6 +113,16 @@
   tiled 无收益，且 tiled 目标需要宽度相关的 swizzle 才能主机侧直写。
 - TILE5_3 像素布局已实测反推（4×4 微块 `q(x,y)` 公式 + 微块网格 GF(2) 掩码，掩码只随宽度变），
   存档见 `work/M3_1_upload.md`。
+
+### M3.1 结论摘要（第三段：读回）
+
+- `vkCmdCopyImageToBuffer` 走 CPU 读回，节点在提交后搬到 `dev->pending_readbacks`，
+  **在 `vkMapMemory` 里等队列空闲再拷**；不能在 `driver_submit` 里等（持队列锁 → 死锁）。
+- 判据：16×16 渲染结果读回四象限 64 像素 W/R/G/B，分布 `W=64 R=64 G=64 B=64 其它=0`。
+- 语义偏差显式告警：同一命令缓冲内在读回之后又写同一图像时 `logw`（`cmd->img_writes` 记录）。
+- 回归新增 `vk_down`（第 12 例，`contains` 7 项）；`--mutate --case vk_down` rc=1。
+- 仍未实现：`vkCmdCopyImage` / `vkCmdBlitImage` / `vkCmdResolveImage` 的 GPU 侧执行（5xx 无 RB_2D）。
+  存档见 `work/M3_1_readback.md`。
 - 真机：`buffer(4x4) -> OPTIMAL image -> 采样 -> 16x16`，256/256 像素精确，四象限 W/R/G/B；
   改动前同一探针 DEVICE_LOST 无输出。回归 **11/11**（新增 `vk_up`）。
 - 未做：`vkCmdCopyImageToBuffer` / `vkCmdCopyImage` / `vkCmdBlitImage` 在 5xx 仍走 r2d 必挂；
@@ -151,7 +161,7 @@
 | 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
 | 3 | M2.4 多 set ✅ | 实际 0.5 天 | 左 20808/右 20808 双色；退回 binding-only 编号 → 单色 41616 反证 |
 | 4 | M2.5 越界 wrap ✅ | 实际 0.2 天 | CLAMP W102/R102；REPEAT 8 段 25/26；MIRROR 4 段 51 |
-| 5 | M3.1 tiled 纹理 ✅(第一段) / 上传 ✅(第二段) | 实际 0.4 + 0.4 天 | 往返零差异；上传 256/256 像素精确、改动前 DEVICE_LOST |
+| 5 | M3.1 tiled 纹理 ✅(第一段) / 上传 ✅(第二段) / 读回 ✅(第三段) | 实际 0.4 + 0.4 + 0.4 天 | 往返零差异；上传 256/256 像素精确；读回 256/256 像素精确，回归 12/12 |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |
 | 7 | M3.3 真实应用 | 2–4 天 | 10 分钟稳定 + fps 数据 |
 

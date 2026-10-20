@@ -535,6 +535,42 @@
           "text": "quad3 (12,12)=RGBA(0,0,255,255)"
         }
       ]
+    },
+    {
+      "name": "vk_down",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_down",
+      "args": [],
+      "checks": [
+        {
+          "kind": "contains",
+          "text": "DONE"
+        },
+        {
+          "kind": "contains",
+          "text": "16x16 LINEAR  mem=8192"
+        },
+        {
+          "kind": "contains",
+          "text": "分布: W=64 R=64 G=64 B=64 其它=0 (总 256)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad0 ( 3, 3)=RGBA(255,255,255,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad1 (12, 3)=RGBA(255,0,0,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad2 ( 3,12)=RGBA(0,255,0,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad3 (12,12)=RGBA(0,0,255,255)"
+        }
+      ]
     }
   ]
 }

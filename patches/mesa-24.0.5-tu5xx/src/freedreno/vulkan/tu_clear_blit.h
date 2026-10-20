@@ -81,7 +81,31 @@ tu5xx_cpu_copy_add_to_image(struct tu_cmd_buffer *cmd,
                             const VkBufferImageCopy2 *regions);
 
 void
-tu5xx_cpu_copy_run(struct tu_cmd_buffer *cmd);
+tu5xx_cpu_copy_add_to_buffer(struct tu_cmd_buffer *cmd,
+                             struct tu_image *img,
+                             struct tu_buffer *buf,
+                             uint32_t region_count,
+                             const VkBufferImageCopy2 *regions);
+
+/* 提交前：只跑 buffer->image */
+void
+tu5xx_cpu_copy_run_pre(struct tu_cmd_buffer *cmd);
+
+/* 提交后把 image->buffer 节点搬到设备级待办链（不在这里等 GPU） */
+void
+tu5xx_cpu_copy_detach_readbacks(struct tu_cmd_buffer *cmd, struct tu_device *dev);
+
+/* 等队列空闲并执行挂起的读回（vkMapMemory 时调用） */
+void
+tu5xx_cpu_readback_drain(struct tu_device *dev);
+
+/* 设备销毁时丢弃未消费的读回节点 */
+void
+tu5xx_cpu_readback_free_all(struct tu_device *dev);
+
+/* 记录“这条命令写入了该图像”，供读回安全检查用 */
+void
+tu5xx_note_image_write(struct tu_cmd_buffer *cmd, struct tu_image *img);
 
 void
 tu5xx_cpu_copy_free(struct tu_cmd_buffer *cmd);

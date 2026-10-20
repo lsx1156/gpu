@@ -560,6 +560,9 @@ struct tu_cmd_buffer
 
    /* 芯片 5 的 CPU 拷贝队列（见 tu_clear_blit.c:tu5xx_cpu_copy_*） */
    struct tu5xx_cpu_copy *cpu_copies;
+   /* 芯片 5 读回安全检查：本命令缓冲里图像写入的 (img, epoch) 记录 */
+   struct util_dynarray img_writes;
+   uint32_t write_epoch;
 
    struct tu_cs cs;
    struct tu_cs draw_cs;

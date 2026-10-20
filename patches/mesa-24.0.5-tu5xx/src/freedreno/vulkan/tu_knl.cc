@@ -150,11 +150,26 @@ tu_queue_submit(struct vk_queue *vk_queue, struct vk_queue_submit *submit)
       for (uint32_t i = 0; i < submit->command_buffer_count; i++) {
          struct tu_cmd_buffer *cmd = container_of(
             submit->command_buffers[i], struct tu_cmd_buffer, vk);
-         tu5xx_cpu_copy_run(cmd);
+         tu5xx_cpu_copy_run_pre(cmd);
       }
    }
 
-   return queue->device->instance->knl->queue_submit(queue, submit);
+   VkResult result =
+      queue->device->instance->knl->queue_submit(queue, submit);
+
+   /* 读回不能在这里等 GPU（会撞队列锁），把节点挂到设备级待办链，
+    * 等应用 vkMapMemory 时再等空闲并拷贝（见 tu_device.cc:tu_MapMemory）。
+    */
+   if (result == VK_SUCCESS &&
+       queue->device->physical_device->info->chip == 5) {
+      for (uint32_t i = 0; i < submit->command_buffer_count; i++) {
+         struct tu_cmd_buffer *cmd = container_of(
+            submit->command_buffers[i], struct tu_cmd_buffer, vk);
+         tu5xx_cpu_copy_detach_readbacks(cmd, queue->device);
+      }
+   }
+
+   return result;
 }
 
 /**
