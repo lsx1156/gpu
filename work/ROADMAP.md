@@ -128,7 +128,10 @@
 - 未做：`vkCmdCopyImageToBuffer` / `vkCmdCopyImage` / `vkCmdBlitImage` 在 5xx 仍走 r2d 必挂；
   读回需“内部渲染到线性 staging + 提交后 CPU 回读”路线。
 
-### M3.2 tiled rendering / GMEM（5–10 天，风险最高）**← 下一步**
+### M3.2 tiled rendering / GMEM（5–10 天，风险最高）**← 进行中**
+- **已做（第一步，2026-10-20）**：a5xx sysmem 附件清除（`RB_CLEAR_CNTL` + `CP_EVENT_WRITE(BLIT)`，
+  移植自 `fd5_clear()`）；此前 `tu_emit_subpass_begin_sysmem<A5XX>` 是空函数，`loadOp=CLEAR` 从未生效。
+  探针 `vk_clear` 13/13 回归通过，见 `work/M3_2_clear.md`。
 - 目标：去掉 `TU_DEBUG=sysmem`，走 binning + GMEM + resolve。
 - 内容：binning pass、tile 描述符、`RB_` 系列的 tile 配置、resolve/clear 的 GMEM 版本、与 sysmem 的开关切换。
 - 验收：既有全部探针在 GMEM 路径下输出与 sysmem 逐像素一致；1080p 简单场景帧时间下降。
@@ -163,6 +166,7 @@
 | 4 | M2.5 越界 wrap ✅ | 实际 0.2 天 | CLAMP W102/R102；REPEAT 8 段 25/26；MIRROR 4 段 51 |
 | 5 | M3.1 tiled 纹理 ✅(第一段) / 上传 ✅(第二段) / 读回 ✅(第三段) | 实际 0.4 + 0.4 + 0.4 天 | 往返零差异；上传 256/256 像素精确；读回 256/256 像素精确，回归 12/12 |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |
+| 6a | M3.2 第一步：sysmem 附件 clear | ✅ 2026-10-20 | `vk_clear` 全幅 4096/4096 + 子区域 256/3840 精确，13/13 |
 | 7 | M3.3 真实应用 | 2–4 天 | 10 分钟稳定 + fps 数据 |
 
 近期三项（1–4）合计约 4–6 个工作日，做完即可支撑「端点真实应用」。

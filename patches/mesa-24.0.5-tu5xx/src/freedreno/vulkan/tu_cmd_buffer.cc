@@ -16,6 +16,7 @@
 #include "tu_clear_blit.h"
 #include "tu_cs.h"
 #include "tu_formats.h"
+#include "util/u_pack_color.h"
 #include "tu_image.h"
 #include "tu_tracepoints.h"
 
@@ -4543,12 +4544,140 @@ tu_emit_subpass_begin_sysmem(struct tu_cmd_buffer *cmd)
    tu_cond_exec_end(cs); /* sysmem */
 }
 
+/* tu5xx: a5xx 的 sysmem clear 走 RB blit 引擎（RB_CLEAR_CNTL + CP_EVENT_WRITE(BLIT)），
+ * 见 fd5_draw.c 的 fd5_clear()。颜色附件已实现；深度/模板待补（探针无深度）。 */
 template <>
 void
 tu_emit_subpass_begin_sysmem<A5XX>(struct tu_cmd_buffer *cmd)
 {
-   /* tu5xx: sysmem clear 待对照 fd5 补齐（r3d blit 引擎），当前探针
-    * renderpass 无附件无 clear，no-op。 */
+   struct tu_cs *cs = &cmd->draw_cs;
+   const struct tu_subpass *subpass = cmd->state.subpass;
+   const uint32_t subpass_idx = subpass - cmd->state.pass->subpasses;
+   const VkRect2D area = cmd->state.render_area;
+   bool any_color = false;
+   bool any_depth = false;
+
+   for (uint32_t c = 0; c < subpass->color_count; c++) {
+      uint32_t a = subpass->color_attachments[c].attachment;
+      if (a == VK_ATTACHMENT_UNUSED)
+         continue;
+      const struct tu_render_pass_attachment *att = &cmd->state.pass->attachments[a];
+      if (att->clear_mask && att->first_subpass_idx == subpass_idx)
+         any_color = true;
+   }
+   if (subpass->depth_stencil_attachment.attachment != VK_ATTACHMENT_UNUSED) {
+      uint32_t a = subpass->depth_stencil_attachment.attachment;
+      const struct tu_render_pass_attachment *att = &cmd->state.pass->attachments[a];
+      if (att->clear_mask && att->first_subpass_idx == subpass_idx)
+         any_depth = true;
+   }
+   if (!any_color && !any_depth)
+      return;
+
+   /* clear 写的是「当前绑定的 MRT/Z 目标」，所以必须先把附件地址写进寄存器 */
+   tu6_emit_mrt<A5XX>(cmd, subpass, cs);
+   tu6_emit_zs<A5XX>(cmd, subpass, cs);
+
+   /* fd5_emit_render_cntl(blit = true): RB_RENDER_CNTL 清 0x8，GRAS_SC_CNTL 仍为 0x8 */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_RENDER_CNTL, 1);
+   tu_cs_emit(cs, 0x0);
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_CNTL, 1);
+   tu_cs_emit(cs, 0x8);
+
+   /* blit 窗口 = render area（RB_RESOLVE_CNTL_1/2 是 blit 的起止坐标） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_RESOLVE_CNTL_1, 2);
+   tu_cs_emit(cs, A5XX_RB_RESOLVE_CNTL_1_X(area.offset.x) |
+                     A5XX_RB_RESOLVE_CNTL_1_Y(area.offset.y));
+   tu_cs_emit(cs, A5XX_RB_RESOLVE_CNTL_2_X(area.offset.x + area.extent.width - 1) |
+                     A5XX_RB_RESOLVE_CNTL_2_Y(area.offset.y + area.extent.height - 1));
+
+   for (uint32_t c = 0; c < subpass->color_count; c++) {
+      uint32_t a = subpass->color_attachments[c].attachment;
+      if (a == VK_ATTACHMENT_UNUSED)
+         continue;
+      const struct tu_render_pass_attachment *att = &cmd->state.pass->attachments[a];
+      if (!(att->clear_mask & VK_IMAGE_ASPECT_COLOR_BIT) ||
+          att->first_subpass_idx != subpass_idx)
+         continue;
+
+      const enum pipe_format pformat = tu_vk_format_to_pipe_format(att->format);
+      const struct tu_native_format fmt = tu5_format_color(pformat);
+      union util_color uc = {0};
+      union pipe_color_union color;
+      memcpy(color.ui, cmd->state.clear_values[a].color.uint32, sizeof(color.ui));
+
+      /* fd5_clear()：RB_CLEAR_COLOR_DWn 要考虑 MRT 的 SWAP，先把分量按 swap 重排再打包 */
+      union pipe_color_union swapped;
+      switch (fmt.swap) {
+      case WZYX:
+         swapped.ui[0] = color.ui[0];
+         swapped.ui[1] = color.ui[1];
+         swapped.ui[2] = color.ui[2];
+         swapped.ui[3] = color.ui[3];
+         break;
+      case WXYZ:
+         swapped.ui[2] = color.ui[0];
+         swapped.ui[1] = color.ui[1];
+         swapped.ui[0] = color.ui[2];
+         swapped.ui[3] = color.ui[3];
+         break;
+      case ZYXW:
+         swapped.ui[3] = color.ui[0];
+         swapped.ui[0] = color.ui[1];
+         swapped.ui[1] = color.ui[2];
+         swapped.ui[2] = color.ui[3];
+         break;
+      case XYZW:
+         swapped.ui[3] = color.ui[0];
+         swapped.ui[2] = color.ui[1];
+         swapped.ui[1] = color.ui[2];
+         swapped.ui[0] = color.ui[3];
+         break;
+      default:
+         swapped = color;
+         break;
+      }
+
+      util_pack_color_union(pformat, &uc, &swapped);
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_BLIT_CNTL, 1);
+      tu_cs_emit(cs, A5XX_RB_BLIT_CNTL_BUF((enum a5xx_blit_buf) (BLIT_MRT0 + c)));
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_CLEAR_CNTL, 1);
+      tu_cs_emit(cs, A5XX_RB_CLEAR_CNTL_FAST_CLEAR | A5XX_RB_CLEAR_CNTL_MASK(0xf));
+
+      tu_cs_emit_pkt4(cs, REG_A5XX_RB_CLEAR_COLOR_DW0, 4);
+      tu_cs_emit(cs, uc.ui[0]);
+      tu_cs_emit(cs, uc.ui[1]);
+      tu_cs_emit(cs, uc.ui[2]);
+      tu_cs_emit(cs, uc.ui[3]);
+
+      /* fd5_emit_blit()：CP_EVENT_WRITE(BLIT) 触发 blit 引擎。
+       * fd5 用 timestamp=true 发 4 个 dword（event + 时间戳地址 + 0），
+       * 只发 1 个 dword 会让硬件把后续 dword 当地址写入 -> DEVICE_LOST。 */
+      struct tu_bo *ts_bo;
+      tu_get_scratch_bo(cmd->device, 16, &ts_bo);
+      tu_cs_emit_pkt7(cs, CP_EVENT_WRITE, 4);
+      tu_cs_emit(cs, CP_EVENT_WRITE_0_EVENT(BLIT));
+      tu_cs_emit_qw(cs, ts_bo->iova);
+      tu_cs_emit(cs, 0x0);
+   }
+
+   if (any_depth) {
+      /* 一次性告警：深度/模板 clear 尚未实现（探针无深度附件） */
+      static bool warned = false;
+      if (!warned) {
+         warned = true;
+         mesa_logw("tu5xx: a5xx 深度/模板 clear 尚未实现，深度附件将保持未初始化内容");
+      }
+   }
+
+   /* 恢复 draw 模式（RB_RENDER_CNTL / GRAS_SC_CNTL 均为 0x8） */
+   tu_cs_emit_pkt4(cs, REG_A5XX_RB_RENDER_CNTL, 1);
+   tu_cs_emit(cs, 0x8);
+   tu_cs_emit_pkt4(cs, REG_A5XX_GRAS_SC_CNTL, 1);
+   tu_cs_emit(cs, 0x8);
+   tu_cs_emit_wfi(cs);
 }
 
 /* emit loads, clears, and mrt/zs/msaa/ubwc state for the subpass that is
