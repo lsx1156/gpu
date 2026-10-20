@@ -1,0 +1,84 @@
+{
+  "_comment": "tu5xx 回归期望表。计数/颜色取自各里程碑真机验证过的基线（M1.4/M1.7/M2.1/M2.2）；改动基线必须同时改文档。",
+  "cases": [
+    {
+      "name": "vktri_base",
+      "dir": "/home/umeko/exp",
+      "exe": "vktri_base",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "vktriangle clean exit"},
+        {"kind": "regex", "pattern": "GPU WRITE OK"},
+        {"kind": "rgba", "marker": "probe red@", "rgba": [224, 15, 16, 255], "tol": 4},
+        {"kind": "rgba", "marker": "probe green@", "rgba": [25, 212, 19, 255], "tol": 4},
+        {"kind": "rgba", "marker": "probe blue@", "rgba": [25, 17, 213, 255], "tol": 4}
+      ]
+    },
+    {
+      "name": "vk_alpha_half",
+      "dir": "/home/umeko/exp",
+      "exe": "vk_alpha_half",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "rgba", "marker": "att0 right", "rgba": [25, 17, 213, 128], "tol": 4},
+        {"kind": "rgba", "marker": "att0 mid", "rgba": [87, 83, 85, 128], "tol": 4},
+        {"kind": "nonbg", "marker": "att1", "value": 0}
+      ]
+    },
+    {
+      "name": "vk_mrt2",
+      "dir": "/home/umeko/exp",
+      "exe": "vk_mrt2",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "rgba", "marker": "att1 top", "rgba": [16, 15, 224, 255], "tol": 4},
+        {"kind": "rgba", "marker": "att1 right", "rgba": [213, 17, 25, 255], "tol": 4},
+        {"kind": "nonbg", "marker": "att1", "value": 20808}
+      ]
+    },
+    {
+      "name": "vk_tex",
+      "dir": "/home/umeko/exp",
+      "exe": "vk_tex",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "blocks", "expect": [
+          {"rgb": [255, 255, 255], "count": 10404},
+          {"rgb": [230, 40, 50], "count": 10404},
+          {"rgb": [60, 220, 70], "count": 10404},
+          {"rgb": [80, 90, 240], "count": 10404}
+        ]}
+      ]
+    },
+    {
+      "name": "vk_tex2",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_tex2",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "blocks", "expect": [
+          {"rgb": [255, 255, 255], "count": 10404},
+          {"rgb": [0, 120, 60], "count": 10404},
+          {"rgb": [60, 220, 70], "count": 10404},
+          {"rgb": [10, 10, 10], "count": 10404}
+        ]}
+      ]
+    },
+    {
+      "name": "vk_tex2_linear",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_tex2",
+      "args": ["linear"],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "regex", "pattern": "RGB\\(255,255,255\\) x 2601"},
+        {"kind": "regex", "pattern": "RGB\\(255,252,252\\) x 51"},
+        {"kind": "regex", "pattern": "RGB\\(254,247,248\\) x 51"}
+      ]
+    }
+  ]
+}

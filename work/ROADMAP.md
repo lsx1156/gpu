@@ -19,13 +19,17 @@
 
 记号：验收全部是**可判定的像素级判据**（色块面积/bbox/颜色），不接受"看起来对"。
 
-### M2.0 回归套件（0.5 天，优先级最高）
+### M2.0 回归套件 ✅ 2026-10-20
 - 目标：一条命令在设备上跑 `vktri_base` / `vk_alpha_half` / `vk_mrt2` / `vk_tex` / `vk_tex2 [linear|repeat]`，
   按内置期望表判定 PASS/FAIL，失败时把日志拉回 `work/out/`。
 - 为什么先做：后面每个里程碑都会碰 `tu_shader.cc` 与 `tu_cmd_buffer.cc`，
   没有自动回归就只能靠人眼比对直方图，历史上已因此浪费过一整轮排查。
 - 验收：故意回退一处（如 `dword1` 写回 size-1）时脚本必须报 FAIL。
-- 落地：`tools/tu5xx_regress.py`（plink/pscp 复用 `work/serial_exec.py` 的凭据处理），期望表 `tools/tu5xx_expect.json`。
+- 落地：`tools/tu5xx_regress.py` + 期望表 `tools/tu5xx_expect.json`。
+  用法：`python tools/tu5xx_regress.py --pwfile <Windows 路径的 pwfile>`；
+  自检：`--mutate`（把某色块计数 +1，必须报 FAIL）；`--list` 看用例表。
+- 实测：6/6 PASS（vktri_base / vk_alpha_half / vk_mrt2 / vk_tex / vk_tex2 / vk_tex2_linear）；
+  `--mutate --case vk_tex` → `色块 RGB(255,255,255) 计数 10404 != 期望 10405`，退出码 1 ✔
 
 ### M2.3 mipmap 链（2–3 天，门槛项）
 - 目标：`MIPLVLS > 0`、per-level 地址推导、`minLod/maxLod`/LOD bias、`VkImageView` 的 `baseMipLevel/levelCount`。
