@@ -278,7 +278,7 @@ M1.3 只证明了 draw 命令执行无 fault，渲染目标读回全黑（0 像�
 - **意义**：tu5xx 第一个经像素级验证的真实光栅化输出（256×256 sysmem，绿色三角形顶点 -0.8,-0.8 / -0.8,0.8 / 0.8,0.8）。VS→VPC→光栅化→FS→RB→sysmem 写回全通路打通。
 - **遗留（下一里程碑候选）**：GMEM/binning 路径；颜色通道字节序（fd5 用 COLOR_SWAP=WZYX，tu5xx 暂 0，纯绿不受影响，多彩输出需核对）；`SP_FS_MRT[1..7]`/`RB_MRT[1..7]` 未用槽清零；FS 写 gl_FragDepth 的 DEPTH_REGID 接线。
 
-### M1.5 / H2：VS→FS 多彩 varying 递送调查（进行中，2026-09-02 更新）
+### M1.5 / H2：VS→FS 多彩 varying 插值（完成，2026-10-20）
 
 M1.4 验证的是 FS 输出**常量绿色**。本阶段目标：让 VS 每顶点颜色经 varyings 平滑插值到 FS（多彩三角形），当前主要卡点。
 
@@ -292,6 +292,20 @@ M1.4 验证的是 FS 输出**常量绿色**。本阶段目标：让 VS 每顶点
   - **根因已收敛**：IR3 仍用 `load_deref` 而非 `load_barycentric_pixel + load_interpolated_input`，说明 VS→FS varying slot 仍 mismatch，待 SPIR-V 修复后验证。
 - **当前实测结果（A506 真机，2026-09-02）**：纯红 flat 三角形 100% 通过；multicolor 仍表现为单一 flat 值（非插值），待 SPIR-V 修复后验证插值指令生成。
 
+#### 结案（2026-10-20）：根因是顶点取数，不是 varying 递送
+
+- **隔离实验**：`work/vktriangle/gen_spirv_exp.py` 生成三个 SPIR-V 变体，设备上直接 gcc 重编：
+  | 变体 | 读回 | 结论 |
+  |---|---|---|
+  | `base` | R≈0、G 随位置变、B 恒 0 | 复现症状 |
+  | `fs_const_blue`（FS 不读 varying） | 三角形内全 (0,0,255) | 输出/读回通道对 comp2 正常 |
+  | `vs_const_blue`（VS 把 varying 第 3 分量强制 1.0） | B 处处 255，R/G 与 base 逐点相同 | VPC→FS 的 comp2 递送正常 |
+- **寄存器证据**（`work/dump_regs.py`）：`VFD_FETCH[0]`=pos(base+0)、`VFD_FETCH[1]`=color(base+12)，stride 24、格式 0x74、`DEST_CNTL1` regid=4/mask=7 全对；**只有 `VFD_DECODE[1].IDX=0`**（应为 1）。fd5 金参考（Xorg submit）是 `DECODE0=0xc4720000 / DECODE1=0xc4620001`，IDX 逐属性递增。
+- **根因**：`tu_pipeline.cc` 的 a5xx 分支 `A5XX_VFD_DECODE_INSTR_IDX(attr->binding)`。a5xx 是"每属性槽一个 VFD_FETCH"，IDX 必须=槽位；交错缓冲（1 binding/2 属性）时两个 DECODE 同指 FETCH[0]，**颜色属性整份读到位置数据**——所以表象是"红绿在动、蓝恒 0"，实为一个属性读错。
+- **修复**：`IDX(attr->binding)` → `IDX(loc)`；重编后 `DECODE1=0xc7400001`。
+- **验证**：读回与解析重心坐标预测逐点吻合 ±1 LSB —— (128,50) 预测 (225,15,15) 实测 (224,15,16)；(50,210) 预测 (25,212,18) 实测 (25,212,19)；(206,210) 预测 (25,18,212) 实测 (25,17,213)；`nonbg` 18207→20808，clean exit，dmesg 0 行。
+- **教训**：`de4f18e` 记的「A5XX bary.f inloc≥2 限制」不成立（FS 一直发 3 条 bary.f）。单 binding 单属性时 `IDX(binding)` 与 `IDX(loc)` 等价，此 bug 只在多属性交错缓冲下暴露。
+
 ---
 
 ---
@@ -302,7 +316,7 @@ M1.4 验证的是 FS 输出**常量绿色**。本阶段目标：让 VS 每顶点
 |---|---|---|
 | 3D / GLES 原生加速 | **原生 EGL/GLES**（SDL2 + GLES2、Qt、或 WebKitGTK 硬件加速路径） | 这条链路已验证可用（glmark2 200+ FPS） |
 | 跑 Chromium / Web 界面 | 软件渲染 + GPU 光栅化尝试（现状）→ **待专项修复 ANGLE EGL** | 硬件合成黑屏已证伪勿试；ANGLE EGL 失败是当前最大优化点 |
-| Vulkan | **tu5xx 自研路线**（M1.3/M1.4 已通） | A506 无官方 Turnip；自研 A5XX 后端 M1.4 已像素级验证三角形渲染 |
+| Vulkan | **tu5xx 自研路线**（M1.3/M1.4/M1.5 已通） | A506 无官方 Turnip；自研 A5XX 后端 M1.5 已像素级验证插值多彩三角形 |
 | 2D 界面 | XRender / EXA 硬件加速可用 | Xorg + openbox 环境正常 |
 
 ### 未来里程碑预期（tu5xx 路线图）

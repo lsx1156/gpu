@@ -21,7 +21,7 @@
 |---|---|---|
 | 内核侧 | `msm` / `kgsl` DRM | 正常 |
 | 原生 GLES/EGL | Mesa Freedreno（FD506） | **可用**，`glmark2` 200+ FPS |
-| Vulkan | **自研 tu5xx 后端** | M1.4 已像素级验证三角形渲染 |
+| Vulkan | **自研 tu5xx 后端** | M1.5 已像素级验证插值多彩三角形 |
 | 2D 加速 | XRender / EXA | 可用 |
 
 ## 关键约束（勿动）
@@ -56,10 +56,11 @@
 - **M1.2**：A5XX 模板 variant 编入 turnip，内核提交链路验证。
 - **M1.3**：第一个 `vkCmdDraw` 三角形执行无 fault。
 - **M1.4**：三角形**像素读回验证通过**（`center=RGBA(0,255,0,255)`），得自自研 tu5xx 后端。
-- **M1.5 / H2（进行中）**：VS→FS 多彩 varying 插值递送调查
+- **M1.5 / H2（完成，2026-10-20）**：VS→FS 多彩 varying 插值
   - H2a 完成：寄存器级对比无缺失
   - H2c 完成：VPC/SP 关键位对齐 fd5，非根因
-  - H2b 进行中：A路寄存器对齐完成，B路纯红flat对照通过，VPC/SP递送寄存器修正完成，SPIR-V着色器修正进行中
+  - H2b 完成：隔离实验证明输出/读回与 varying 递送均正常
+  - **根因**：a5xx `VFD_DECODE[].IDX` 用了 vertex binding 而非属性槽位，交错缓冲下颜色属性整份读到位置数据；改 `IDX(loc)` 后插值与解析预测逐点吻合（±1 LSB）
 
 详细里程碑说明见 [`GPU_DEVELOPMENT.md`](GPU_DEVELOPMENT.md) 相应章节。
 
