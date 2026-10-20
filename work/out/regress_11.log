@@ -1,0 +1,13 @@
+[PASS] vktri_base     5 项检查
+[PASS] vk_alpha_half  4 项检查
+[PASS] vk_mrt2        4 项检查
+[PASS] vk_tex         2 项检查
+[PASS] vk_tex2        2 项检查
+[PASS] vk_tex2_linear 4 项检查
+[PASS] vk_mip         6 项检查
+[PASS] vk_set         4 项检查
+[PASS] vk_wrap        5 项检查
+[PASS] vk_tile        7 项检查
+[PASS] vk_up          7 项检查
+
+11 通过 / 0 失败 (共 11)

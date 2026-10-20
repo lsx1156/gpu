@@ -7,11 +7,47 @@
       "exe": "vktri_base",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "vktriangle clean exit"},
-        {"kind": "regex", "pattern": "GPU WRITE OK"},
-        {"kind": "rgba", "marker": "probe red@", "rgba": [224, 15, 16, 255], "tol": 4},
-        {"kind": "rgba", "marker": "probe green@", "rgba": [25, 212, 19, 255], "tol": 4},
-        {"kind": "rgba", "marker": "probe blue@", "rgba": [25, 17, 213, 255], "tol": 4}
+        {
+          "kind": "regex",
+          "pattern": "vktriangle clean exit"
+        },
+        {
+          "kind": "regex",
+          "pattern": "GPU WRITE OK"
+        },
+        {
+          "kind": "rgba",
+          "marker": "probe red@",
+          "rgba": [
+            224,
+            15,
+            16,
+            255
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "rgba",
+          "marker": "probe green@",
+          "rgba": [
+            25,
+            212,
+            19,
+            255
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "rgba",
+          "marker": "probe blue@",
+          "rgba": [
+            25,
+            17,
+            213,
+            255
+          ],
+          "tol": 4
+        }
       ]
     },
     {
@@ -20,10 +56,37 @@
       "exe": "vk_alpha_half",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "rgba", "marker": "att0 right", "rgba": [25, 17, 213, 128], "tol": 4},
-        {"kind": "rgba", "marker": "att0 mid", "rgba": [87, 83, 85, 128], "tol": 4},
-        {"kind": "nonbg", "marker": "att1", "value": 0}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "rgba",
+          "marker": "att0 right",
+          "rgba": [
+            25,
+            17,
+            213,
+            128
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "rgba",
+          "marker": "att0 mid",
+          "rgba": [
+            87,
+            83,
+            85,
+            128
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "nonbg",
+          "marker": "att1",
+          "value": 0
+        }
       ]
     },
     {
@@ -32,10 +95,37 @@
       "exe": "vk_mrt2",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "rgba", "marker": "att1 top", "rgba": [16, 15, 224, 255], "tol": 4},
-        {"kind": "rgba", "marker": "att1 right", "rgba": [213, 17, 25, 255], "tol": 4},
-        {"kind": "nonbg", "marker": "att1", "value": 20808}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "rgba",
+          "marker": "att1 top",
+          "rgba": [
+            16,
+            15,
+            224,
+            255
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "rgba",
+          "marker": "att1 right",
+          "rgba": [
+            213,
+            17,
+            25,
+            255
+          ],
+          "tol": 4
+        },
+        {
+          "kind": "nonbg",
+          "marker": "att1",
+          "value": 20808
+        }
       ]
     },
     {
@@ -44,13 +134,47 @@
       "exe": "vk_tex",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "blocks", "expect": [
-          {"rgb": [255, 255, 255], "count": 10404},
-          {"rgb": [230, 40, 50], "count": 10404},
-          {"rgb": [60, 220, 70], "count": 10404},
-          {"rgb": [80, 90, 240], "count": 10404}
-        ]}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "blocks",
+          "expect": [
+            {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                230,
+                40,
+                50
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                60,
+                220,
+                70
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                80,
+                90,
+                240
+              ],
+              "count": 10404
+            }
+          ]
+        }
       ]
     },
     {
@@ -59,25 +183,73 @@
       "exe": "vk_tex2",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "blocks", "expect": [
-          {"rgb": [255, 255, 255], "count": 10404},
-          {"rgb": [0, 120, 60], "count": 10404},
-          {"rgb": [60, 220, 70], "count": 10404},
-          {"rgb": [10, 10, 10], "count": 10404}
-        ]}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "blocks",
+          "expect": [
+            {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                0,
+                120,
+                60
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                60,
+                220,
+                70
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                10,
+                10,
+                10
+              ],
+              "count": 10404
+            }
+          ]
+        }
       ]
     },
     {
       "name": "vk_tex2_linear",
       "dir": "/home/umeko/exp2",
       "exe": "vk_tex2",
-      "args": ["linear"],
+      "args": [
+        "linear"
+      ],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "regex", "pattern": "RGB\\(255,255,255\\) x 2601"},
-        {"kind": "regex", "pattern": "RGB\\(255,252,252\\) x 51"},
-        {"kind": "regex", "pattern": "RGB\\(254,247,248\\) x 51"}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "regex",
+          "pattern": "RGB\\(255,255,255\\) x 2601"
+        },
+        {
+          "kind": "regex",
+          "pattern": "RGB\\(255,252,252\\) x 51"
+        },
+        {
+          "kind": "regex",
+          "pattern": "RGB\\(254,247,248\\) x 51"
+        }
       ]
     },
     {
@@ -86,17 +258,91 @@
       "exe": "vk_mip",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "blocks", "expect": [
-          {"rgb": [200, 30, 40], "count": 10404},
-          {"rgb": [40, 190, 60], "count": 10404},
-          {"rgb": [50, 70, 220], "count": 10404},
-          {"rgb": [230, 200, 40], "count": 10404}
-        ]},
-        {"kind": "rgba", "marker": "quad0(LOD0)", "rgba": [200, 30, 40, 255], "tol": 2},
-        {"kind": "rgba", "marker": "quad1(LOD1)", "rgba": [40, 190, 60, 255], "tol": 2},
-        {"kind": "rgba", "marker": "quad2(LOD2)", "rgba": [50, 70, 220, 255], "tol": 2},
-        {"kind": "rgba", "marker": "quad3(LOD3)", "rgba": [230, 200, 40, 255], "tol": 2}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "blocks",
+          "expect": [
+            {
+              "rgb": [
+                200,
+                30,
+                40
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                40,
+                190,
+                60
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                50,
+                70,
+                220
+              ],
+              "count": 10404
+            },
+            {
+              "rgb": [
+                230,
+                200,
+                40
+              ],
+              "count": 10404
+            }
+          ]
+        },
+        {
+          "kind": "rgba",
+          "marker": "quad0(LOD0)",
+          "rgba": [
+            200,
+            30,
+            40,
+            255
+          ],
+          "tol": 2
+        },
+        {
+          "kind": "rgba",
+          "marker": "quad1(LOD1)",
+          "rgba": [
+            40,
+            190,
+            60,
+            255
+          ],
+          "tol": 2
+        },
+        {
+          "kind": "rgba",
+          "marker": "quad2(LOD2)",
+          "rgba": [
+            50,
+            70,
+            220,
+            255
+          ],
+          "tol": 2
+        },
+        {
+          "kind": "rgba",
+          "marker": "quad3(LOD3)",
+          "rgba": [
+            230,
+            200,
+            40,
+            255
+          ],
+          "tol": 2
+        }
       ]
     },
     {
@@ -105,13 +351,53 @@
       "exe": "vk_set",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "blocks", "expect": [
-          {"rgb": [10, 200, 90], "count": 20808},
-          {"rgb": [200, 60, 10], "count": 20808}
-        ]},
-        {"kind": "rgba", "marker": "left(set0)", "rgba": [10, 200, 90, 255], "tol": 2},
-        {"kind": "rgba", "marker": "right(set1)", "rgba": [200, 60, 10, 255], "tol": 2}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "blocks",
+          "expect": [
+            {
+              "rgb": [
+                10,
+                200,
+                90
+              ],
+              "count": 20808
+            },
+            {
+              "rgb": [
+                200,
+                60,
+                10
+              ],
+              "count": 20808
+            }
+          ]
+        },
+        {
+          "kind": "rgba",
+          "marker": "left(set0)",
+          "rgba": [
+            10,
+            200,
+            90,
+            255
+          ],
+          "tol": 2
+        },
+        {
+          "kind": "rgba",
+          "marker": "right(set1)",
+          "rgba": [
+            200,
+            60,
+            10,
+            255
+          ],
+          "tol": 2
+        }
       ]
     },
     {
@@ -120,11 +406,26 @@
       "exe": "vk_wrap",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "regex", "pattern": "nonbg=41616"},
-        {"kind": "regex", "pattern": "CLAMP  y=\\s*60 RLE: W x1[0-9][0-9] R x1[0-9][0-9]"},
-        {"kind": "regex", "pattern": "REPEAT y=\\s*128 RLE: (?:R x2[0-9] W x2[0-9] ){3}R x2[0-9] W x2[0-9]"},
-        {"kind": "regex", "pattern": "MIRROR y=\\s*196 RLE: R x5[0-9] W x5[0-9] R x5[0-9] W x5[0-9]"}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "regex",
+          "pattern": "nonbg=41616"
+        },
+        {
+          "kind": "regex",
+          "pattern": "CLAMP  y=\\s*60 RLE: W x1[0-9][0-9] R x1[0-9][0-9]"
+        },
+        {
+          "kind": "regex",
+          "pattern": "REPEAT y=\\s*128 RLE: (?:R x2[0-9] W x2[0-9] ){3}R x2[0-9] W x2[0-9]"
+        },
+        {
+          "kind": "regex",
+          "pattern": "MIRROR y=\\s*196 RLE: R x5[0-9] W x5[0-9] R x5[0-9] W x5[0-9]"
+        }
       ]
     },
     {
@@ -133,18 +434,106 @@
       "exe": "vk_tile",
       "args": [],
       "checks": [
-        {"kind": "regex", "pattern": "DONE"},
-        {"kind": "regex", "pattern": "TILED +128x128 mem=65536"},
-        {"kind": "regex", "pattern": "差异字节=0 最大差=0"},
-        {"kind": "blocks", "expect": [
-          {"rgb": [255, 255, 255], "count": 16384},
-          {"rgb": [255, 0, 0], "count": 16384},
-          {"rgb": [0, 255, 0], "count": 16384},
-          {"rgb": [0, 0, 255], "count": 16384}
-        ]},
-        {"kind": "regex", "pattern": "quad0.*255,255,255"},
-        {"kind": "regex", "pattern": "quad1.*255, +0, +0"},
-        {"kind": "regex", "pattern": "quad3.*0, +0,255"}
+        {
+          "kind": "regex",
+          "pattern": "DONE"
+        },
+        {
+          "kind": "regex",
+          "pattern": "TILED +128x128 mem=65536"
+        },
+        {
+          "kind": "regex",
+          "pattern": "差异字节=0 最大差=0"
+        },
+        {
+          "kind": "blocks",
+          "expect": [
+            {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "count": 16384
+            },
+            {
+              "rgb": [
+                255,
+                0,
+                0
+              ],
+              "count": 16384
+            },
+            {
+              "rgb": [
+                0,
+                255,
+                0
+              ],
+              "count": 16384
+            },
+            {
+              "rgb": [
+                0,
+                0,
+                255
+              ],
+              "count": 16384
+            }
+          ]
+        },
+        {
+          "kind": "regex",
+          "pattern": "quad0.*255,255,255"
+        },
+        {
+          "kind": "regex",
+          "pattern": "quad1.*255, +0, +0"
+        },
+        {
+          "kind": "regex",
+          "pattern": "quad3.*0, +0,255"
+        }
+      ],
+      "env": {
+        "TU5XX_TILE": "1"
+      }
+    },
+    {
+      "name": "vk_up",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_up",
+      "args": [],
+      "checks": [
+        {
+          "kind": "contains",
+          "text": "DONE"
+        },
+        {
+          "kind": "contains",
+          "text": "4x4 OPTIMAL mem=8192"
+        },
+        {
+          "kind": "contains",
+          "text": "分布: W=64 R=64 G=64 B=64 其它=0"
+        },
+        {
+          "kind": "contains",
+          "text": "quad0 ( 3, 3)=RGBA(255,255,255,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad1 (12, 3)=RGBA(255,0,0,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad2 ( 3,12)=RGBA(0,255,0,255)"
+        },
+        {
+          "kind": "contains",
+          "text": "quad3 (12,12)=RGBA(0,0,255,255)"
+        }
       ]
     }
   ]

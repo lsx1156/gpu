@@ -2093,6 +2093,125 @@ tu_copy_buffer_to_image(struct tu_cmd_buffer *cmd,
    ops->teardown(cmd, cs);
 }
 
+/* ---- 芯片 5（a5xx）：buffer->image 的 CPU 拷贝回退 -----------------------
+ *
+ * a5xx 没有 A5XX_RB_2D_* 寄存器（树里只有 A6XX_RB_2D_*），走 R2D blitter 会写
+ * 无效寄存器，实测 vkQueueWaitIdle 返回 DEVICE_LOST(0xfffffffc)。本机是 sysmem
+ * 且所有 BO 都 host-visible，因此在队列提交前用 CPU 逐行复制，语义等价于
+ * “提交时数据已就位”。只支持 linear 布局（tile_mode == 0）；OPTIMAL 默认也按
+ * linear 分配（见 tu_image.cc 的 TU5XX_TILE 开关）。
+ */
+
+struct tu5xx_cpu_copy {
+   struct tu5xx_cpu_copy *next;
+   struct tu_buffer *buf;
+   struct tu_image *img;
+   uint32_t region_count;
+   VkBufferImageCopy2 regions[];
+};
+
+void
+tu5xx_cpu_copy_add_to_image(struct tu_cmd_buffer *cmd,
+                            struct tu_buffer *buf,
+                            struct tu_image *img,
+                            uint32_t region_count,
+                            const VkBufferImageCopy2 *regions)
+{
+   if (region_count == 0)
+      return;
+
+   struct tu5xx_cpu_copy *node = (struct tu5xx_cpu_copy *)
+      calloc(1, sizeof(*node) + region_count * sizeof(VkBufferImageCopy2));
+   if (node == NULL) {
+      mesa_loge("tu5xx: CPU 拷贝节点分配失败");
+      return;
+   }
+
+   node->buf = buf;
+   node->img = img;
+   node->region_count = region_count;
+   memcpy(node->regions, regions, region_count * sizeof(VkBufferImageCopy2));
+
+   if (cmd->cpu_copies == NULL) {
+      cmd->cpu_copies = node;
+   } else {
+      struct tu5xx_cpu_copy *tail = cmd->cpu_copies;
+      while (tail->next != NULL)
+         tail = tail->next;
+      tail->next = node;
+   }
+}
+
+void
+tu5xx_cpu_copy_run(struct tu_cmd_buffer *cmd)
+{
+   struct tu_device *dev = cmd->device;
+
+   for (struct tu5xx_cpu_copy *node = cmd->cpu_copies; node != NULL;
+        node = node->next) {
+      struct tu_image *img = node->img;
+      const struct fdl_layout *layout = &img->layout[0];
+      const unsigned bpp = vk_format_get_blocksize(img->vk.format);
+
+      if (layout->tile_mode != 0) {
+         static bool warned = false;
+         if (!warned) {
+            mesa_logw("tu5xx: 5xx 的 buffer->image 拷贝只支持 linear 布局 "
+                      "(tile_mode=%u)，该拷贝被跳过", layout->tile_mode);
+            warned = true;
+         }
+         continue;
+      }
+
+      if (tu_bo_map(dev, img->bo) != VK_SUCCESS ||
+          tu_bo_map(dev, node->buf->bo) != VK_SUCCESS) {
+         mesa_loge("tu5xx: CPU 拷贝取映射失败");
+         continue;
+      }
+
+      for (uint32_t r = 0; r < node->region_count; r++) {
+         const VkBufferImageCopy2 *region = &node->regions[r];
+         const uint32_t level = region->imageSubresource.mipLevel;
+         const uint64_t pitch = fdl_pitch(layout, level);
+         const uint32_t width = region->imageExtent.width;
+         const uint32_t height = MAX2(region->imageExtent.height, 1);
+         const uint32_t depth = MAX2(region->imageExtent.depth, 1);
+         const uint32_t src_row_len =
+            region->bufferRowLength ? region->bufferRowLength : width;
+         const uint32_t src_img_height =
+            region->bufferImageHeight ? region->bufferImageHeight : height;
+         const uint64_t row_bytes = (uint64_t)width * bpp;
+
+         for (uint32_t z = 0; z < depth; z++) {
+            const uint32_t layer = region->imageSubresource.baseArrayLayer + z;
+            uint8_t *dst = (uint8_t *)img->bo->map +
+                           layout->slices[level].offset +
+                           (uint64_t)layer * layout->layer_size +
+                           (uint64_t)region->imageOffset.y * pitch +
+                           (uint64_t)region->imageOffset.x * bpp;
+            const uint8_t *src = (const uint8_t *)node->buf->bo->map +
+                                 region->bufferOffset +
+                                 (uint64_t)z * src_img_height * src_row_len * bpp;
+            for (uint32_t y = 0; y < height; y++)
+               memcpy(dst + y * pitch, src + (uint64_t)y * src_row_len * bpp,
+                      row_bytes);
+         }
+      }
+   }
+}
+
+void
+tu5xx_cpu_copy_free(struct tu_cmd_buffer *cmd)
+{
+   struct tu5xx_cpu_copy *node = cmd->cpu_copies;
+   while (node != NULL) {
+      struct tu5xx_cpu_copy *next = node->next;
+      free(node);
+      node = next;
+   }
+   cmd->cpu_copies = NULL;
+}
+
 template <chip CHIP>
 VKAPI_ATTR void VKAPI_CALL
 tu_CmdCopyBufferToImage2(VkCommandBuffer commandBuffer,
@@ -2101,6 +2220,15 @@ tu_CmdCopyBufferToImage2(VkCommandBuffer commandBuffer,
    TU_FROM_HANDLE(tu_cmd_buffer, cmd, commandBuffer);
    TU_FROM_HANDLE(tu_image, dst_image, pCopyBufferToImageInfo->dstImage);
    TU_FROM_HANDLE(tu_buffer, src_buffer, pCopyBufferToImageInfo->srcBuffer);
+
+   if (cmd->device->physical_device->info->chip == 5) {
+      tu5xx_cpu_copy_add_to_image(cmd, src_buffer, dst_image,
+                                  pCopyBufferToImageInfo->regionCount,
+                                  pCopyBufferToImageInfo->pRegions);
+      if (dst_image->lrz_height)
+         tu_disable_lrz(cmd, &cmd->cs, dst_image);
+      return;
+   }
 
    for (unsigned i = 0; i < pCopyBufferToImageInfo->regionCount; ++i)
       tu_copy_buffer_to_image<CHIP>(cmd, src_buffer, dst_image,

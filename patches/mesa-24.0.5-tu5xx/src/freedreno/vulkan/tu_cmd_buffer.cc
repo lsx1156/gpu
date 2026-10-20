@@ -2586,6 +2586,8 @@ tu_cmd_buffer_destroy(struct vk_command_buffer *vk_cmd_buffer)
    struct tu_cmd_buffer *cmd_buffer =
       container_of(vk_cmd_buffer, struct tu_cmd_buffer, vk);
 
+   tu5xx_cpu_copy_free(cmd_buffer);
+
    tu_cs_finish(&cmd_buffer->cs);
    tu_cs_finish(&cmd_buffer->draw_cs);
    tu_cs_finish(&cmd_buffer->tile_store_cs);
@@ -2620,6 +2622,8 @@ tu_reset_cmd_buffer(struct vk_command_buffer *vk_cmd_buffer,
 {
    struct tu_cmd_buffer *cmd_buffer =
       container_of(vk_cmd_buffer, struct tu_cmd_buffer, vk);
+
+   tu5xx_cpu_copy_free(cmd_buffer);
 
    vk_command_buffer_reset(&cmd_buffer->vk);
 

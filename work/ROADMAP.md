@@ -84,7 +84,7 @@
 - 未测：`BORDER`（缺 borderColor 通路）、`MIRROR_CLAMP_TO_EDGE`、各向异性、shadow compare。
 - 详见 `work/M2_5_wrap.md`；回归 `vk_wrap` 已入期望表（9/9）。
 
-### M3.1 tiled 纹理（第一段 ✅ 2026-10-20；第二段未做）
+### M3.1 tiled 纹理（第一段 ✅ 2026-10-20；第二段：上传 ✅ / 读回 ❌）
 - 目标：`VK_IMAGE_TILING_OPTIMAL` 走 tiled layout（TILE5_3 或等价），linear 仅作回退。
 - 前置：`fdl/freedreno_layout.h` 的 tile 描述 + `fd5_texture.c` 的 TILE_MODE/SWAP/UBWC 选择。
 - 验收：同一张 64×64 纹理分别以 linear/tiled 上传，采样结果逐像素相同（用 CRC/直方图对比）；
@@ -101,7 +101,22 @@
   四象限 4 色各 16384。
 - 反证：只把描述符侧退回 linear ⇒ 65536 字节差异、右半两象限错色。
 - 未做：主机侧直写 tiled（需 swizzle 规则，即 `vkCmdCopyBufferToImage` 的缺口）、cpp<4、TILE5_2。
-- 详见 `work/M3_1_tiled.md`；回归 `vk_tile`（10/10）。
+- 详见 `work/M3_1_tiled.md`；回归 `vk_tile`（本轮起需 `TU5XX_TILE=1`，期望表已支持 per-case env）。
+
+### M3.1 结论摘要（第二段：主机侧上传）
+
+- **a5xx 没有 RB_2D 寄存器**（树里只有 `A6XX_RB_2D_*`），原 `vkCmdCopyBufferToImage` 的 r2d 路径
+  在 5xx 上直接 `DEVICE_LOST`（实测 `vkQueueWaitIdle = 0xfffffffc`）。
+- 改为 **CPU 逐行拷贝 + 提交前执行**（`tu_queue_submit` 钩子），仅支持 linear 目标；
+  sysmem + 全 BO host-visible 下语义等价。
+- `VK_IMAGE_TILING_OPTIMAL` **默认按 linear 分配**，`TU5XX_TILE=1` 才启用 TILE5_3 —— sysmem 下
+  tiled 无收益，且 tiled 目标需要宽度相关的 swizzle 才能主机侧直写。
+- TILE5_3 像素布局已实测反推（4×4 微块 `q(x,y)` 公式 + 微块网格 GF(2) 掩码，掩码只随宽度变），
+  存档见 `work/M3_1_upload.md`。
+- 真机：`buffer(4x4) -> OPTIMAL image -> 采样 -> 16x16`，256/256 像素精确，四象限 W/R/G/B；
+  改动前同一探针 DEVICE_LOST 无输出。回归 **11/11**（新增 `vk_up`）。
+- 未做：`vkCmdCopyImageToBuffer` / `vkCmdCopyImage` / `vkCmdBlitImage` 在 5xx 仍走 r2d 必挂；
+  读回需“内部渲染到线性 staging + 提交后 CPU 回读”路线。
 
 ### M3.2 tiled rendering / GMEM（5–10 天，风险最高）**← 下一步**
 - 目标：去掉 `TU_DEBUG=sysmem`，走 binning + GMEM + resolve。
@@ -136,7 +151,7 @@
 | 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
 | 3 | M2.4 多 set ✅ | 实际 0.5 天 | 左 20808/右 20808 双色；退回 binding-only 编号 → 单色 41616 反证 |
 | 4 | M2.5 越界 wrap ✅ | 实际 0.2 天 | CLAMP W102/R102；REPEAT 8 段 25/26；MIRROR 4 段 51 |
-| 5 | M3.1 tiled 纹理 ✅(第一段) | 实际 0.4 天 | tiled 往返与 linear 直采逐字节相同(0/262144)；单侧退回 ⇒ 65536 字节差异 |
+| 5 | M3.1 tiled 纹理 ✅(第一段) / 上传 ✅(第二段) | 实际 0.4 + 0.4 天 | 往返零差异；上传 256/256 像素精确、改动前 DEVICE_LOST |
 | 6 | M3.2 GMEM | 5–10 天 | 全部探针逐像素一致 + 帧时间下降 |
 | 7 | M3.3 真实应用 | 2–4 天 | 10 分钟稳定 + fps 数据 |
 

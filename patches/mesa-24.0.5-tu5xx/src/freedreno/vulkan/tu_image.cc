@@ -460,7 +460,11 @@ tu_image_init(struct tu_device *device, struct tu_image *image,
       /* a5xx 的 tile mode 枚举只有 LINEAR(0)/TILE5_2(2)/TILE5_3(3)；
        * 数值与 TILE6_2/TILE6_3 相同，fdl5_layout 只判断是否为 0。
        * cpp<4 的 tiled 需要 pitchalign+1，走 linear 更稳（与 fd5 的 ok_format 一致）。 */
-      if (pCreateInfo->tiling == VK_IMAGE_TILING_OPTIMAL) {
+      /* 默认把 OPTIMAL 当 linear 处理（sysmem 下无收益，且主机侧上传无需 swizzle）；
+       * 需要验证 tiled 能力时设 TU5XX_TILE=1。
+       */
+      if (pCreateInfo->tiling == VK_IMAGE_TILING_OPTIMAL &&
+          getenv("TU5XX_TILE") != NULL) {
          const enum pipe_format pf0 = tu6_plane_format(image->vk.format, 0);
          if (util_format_get_blocksize(pf0) >= 4)
             tile_mode = (enum a6xx_tile_mode) TILE5_3;

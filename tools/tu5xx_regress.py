@@ -104,6 +104,9 @@ def evaluate(case, out):
             errs += check_rgba(out, chk["marker"], chk["rgba"], chk.get("tol", 2))
         elif kind == "regex":
             errs += check_regex(out, chk["pattern"])
+        elif kind == "contains":
+            if chk["text"] not in out:
+                errs.append("缺少文本 %r" % chk["text"])
         else:
             errs.append("未知检查类型 %r" % kind)
     return errs
@@ -140,6 +143,10 @@ def main():
                     chk["expect"][0]["count"] += 1
                     print("[mutate] %s: 期望计数 +1 -> 应当 FAIL" % c["name"])
                     break
+                if chk["kind"] == "contains":
+                    chk["text"] = chk["text"] + " __mutate__"
+                    print("[mutate] %s: 文本追加哨兵 -> 应当 FAIL" % c["name"])
+                    break
             else:
                 continue
             break
@@ -151,8 +158,10 @@ def main():
 
     fail = 0
     for c in cases:
-        remote = (REMOTE_ENV + "cd %s && timeout %d ./%s %s 2>&1"
-                  % (c["dir"], args.timeout, c["exe"], " ".join(c.get("args", []))))
+        env_prefix = "".join("%s=%s " % (k, v) for k, v in (c.get("env") or {}).items())
+        remote = (REMOTE_ENV + "cd %s && %stimeout %d ./%s %s 2>&1"
+                  % (c["dir"], env_prefix, args.timeout, c["exe"],
+                     " ".join(c.get("args", []))))
         try:
             rc, out = run_remote(args.pwfile, args.host, remote, args.timeout + 30)
         except subprocess.TimeoutExpired:

@@ -1,0 +1,28 @@
+[vtn-fn] emit begin impl=0xaaaae0524250
+[vtn-cfg] block 0 emitted
+[vtn-fn] phi done
+[vtn-fn] copyprop done
+[vtn-fn] remat done
+[vtn-fn] repair done
+[vtn] goto_ifs done
+[vtn] continue done
+[vtn] dce done
+[vtn-fn] emit begin impl=0xaaaae0524ce0
+[vtn-cfg] block 0 emitted
+[vtn-fn] phi done
+[vtn-fn] copyprop done
+[vtn-fn] remat done
+[vtn-fn] repair done
+[vtn] goto_ifs done
+[vtn] continue done
+[vtn] dce done
+=== TU5XX-A5XX-INIT-HW-MARKER ===
+  img 4x4 OPTIMAL mem=8192
+  img 16x16 LINEAR  mem=8192
+  分布: W=64 R=64 G=64 B=64 其它=0 (总 256)
+  quad0 ( 3, 3)=RGBA(255,255,255,255) 期望 W
+  quad1 (12, 3)=RGBA(255,0,0,255) 期望 R
+  quad2 ( 3,12)=RGBA(0,255,0,255) 期望 G
+  quad3 (12,12)=RGBA(0,0,255,255) 期望 B
+  DONE
+rc=0
