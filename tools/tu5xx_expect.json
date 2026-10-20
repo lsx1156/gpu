@@ -79,6 +79,25 @@
         {"kind": "regex", "pattern": "RGB\\(255,252,252\\) x 51"},
         {"kind": "regex", "pattern": "RGB\\(254,247,248\\) x 51"}
       ]
+    },
+    {
+      "name": "vk_mip",
+      "dir": "/home/umeko/exp2",
+      "exe": "vk_mip",
+      "args": [],
+      "checks": [
+        {"kind": "regex", "pattern": "DONE"},
+        {"kind": "blocks", "expect": [
+          {"rgb": [200, 30, 40], "count": 10404},
+          {"rgb": [40, 190, 60], "count": 10404},
+          {"rgb": [50, 70, 220], "count": 10404},
+          {"rgb": [230, 200, 40], "count": 10404}
+        ]},
+        {"kind": "rgba", "marker": "quad0(LOD0)", "rgba": [200, 30, 40, 255], "tol": 2},
+        {"kind": "rgba", "marker": "quad1(LOD1)", "rgba": [40, 190, 60, 255], "tol": 2},
+        {"kind": "rgba", "marker": "quad2(LOD2)", "rgba": [50, 70, 220, 255], "tol": 2},
+        {"kind": "rgba", "marker": "quad3(LOD3)", "rgba": [230, 200, 40, 255], "tol": 2}
+      ]
     }
   ]
 }

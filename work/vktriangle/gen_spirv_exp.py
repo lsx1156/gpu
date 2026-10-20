@@ -413,6 +413,60 @@ def build_fs_tex2():
     return s
 
 
+def build_fs_lod(lod_bits):
+    """FS: 采样一张 mip 链纹理，使用显式 LOD
+    OpImageSampleExplicitLod(0x0058) + ImageOperands mask=0x2 (Lod)。
+    """
+    s = Spirv()
+    main_id = s.id(); out_col = s.id(); in_col = s.id(); tex_var = s.id()
+    t_void = s.id(); t_fn = s.id(); t_f32 = s.id(); t_v3 = s.id(); t_v4 = s.id()
+    t_v2 = s.id(); t_img = s.id(); t_samp = s.id(); t_simg = s.id()
+    p_out = s.id(); p_in = s.id(); p_simg = s.id(); c_lod = s.id()
+
+    s.inst(0x0011, [1])
+    s.inst(0x000E, [0, 1])
+    s.inst(0x000F, [4, main_id, b"main", out_col, in_col, tex_var])
+    s.inst(0x0010, [main_id, 7])
+    s.inst(0x0047, [out_col, 30, 0])
+    s.inst(0x0047, [in_col, 30, 0])
+    s.inst(0x0047, [tex_var, 34, 0])      # DescriptorSet 0
+    s.inst(0x0047, [tex_var, 33, 0])      # Binding 0
+
+    s.inst(0x0013, [t_void])
+    s.inst(0x0021, [t_fn, t_void])
+    s.inst(0x0016, [t_f32, 32])
+    s.inst(0x0017, [t_v3, t_f32, 3])
+    s.inst(0x0017, [t_v4, t_f32, 4])
+    s.inst(0x0017, [t_v2, t_f32, 2])
+    s.inst(0x0019, [t_img, t_f32, 1, 0, 0, 0, 1, 0])
+    s.inst(0x001A, [t_samp])
+    s.inst(0x001B, [t_simg, t_img])
+    s.inst(0x002B, [t_f32, c_lod, lod_bits])    # OpConstant LOD
+    s.inst(0x0020, [p_out, 3, t_v4])
+    s.inst(0x0020, [p_in, 1, t_v3])
+    s.inst(0x0020, [p_simg, 0, t_simg])
+    s.inst(0x003B, [p_out, out_col, 3])
+    s.inst(0x003B, [p_in, in_col, 1])
+    s.inst(0x003B, [p_simg, tex_var, 0])
+
+    lbl = s.id(); col = s.id(); uv = s.id()
+    si = s.id(); texel = s.id()
+    s.inst(0x0036, [t_void, main_id, 0, t_fn])
+    s.inst(0x00F8, [lbl])
+    s.inst(0x003D, [t_v3, col, in_col])
+    s.inst(0x004F, [t_v2, uv, col, col, 0, 1])
+    s.inst(0x003D, [t_simg, si, tex_var])
+    # OpImageSampleExplicitLod: ... coord, mask=Lod(0x2), lod
+    s.inst(0x0058, [t_v4, texel, si, uv, 0x2, c_lod])
+    s.inst(0x003E, [out_col, texel])
+    s.inst(0x00FD, [])
+    s.inst(0x0038, [])
+    return s
+
+
+LOD_BITS = {0: 0x00000000, 1: 0x3F800000, 2: 0x40000000, 3: 0x40400000}
+
+
 def emit_c(name, s):
     ws = s.header() + s.words
     lines = ["static const uint32_t %s[] = {" % name]
@@ -435,6 +489,15 @@ MODES = {
 if __name__ == '__main__':
     mode = sys.argv[1]
     out = sys.argv[2]
+    if mode == 'lod':
+        txt = ("/* spirv_lod.h - gen_spirv_exp.py mode=lod */\n#include <stdint.h>\n\n"
+               + emit_c("vs_spv", build_vs_base()) + "\n\n")
+        for lvl, bits in sorted(LOD_BITS.items()):
+            txt += emit_c("fs_spv_lod%d" % lvl, build_fs_lod(bits)) + "\n\n"
+        with open(out, "w", newline="\n") as f:
+            f.write(txt)
+        print("wrote %s (mode=lod, 4 个 LOD 变体)" % out)
+        sys.exit(0)
     vsf, fsf = MODES[mode]
     txt = ("/* spirv_tri.h - gen_spirv_exp.py mode=%s */\n#include <stdint.h>\n\n" % mode
            + emit_c("vs_spv", vsf()) + "\n\n" + emit_c("fs_spv", fsf()) + "\n")

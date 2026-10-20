@@ -329,8 +329,8 @@ tu5xx 驱动当前处于「能光栅化但 varying 插值未通」阶段。按�
 | **M1.7** | 颜色字节序 & MRT 正确性 | 多彩三角形与预期颜色完全一致（含 alpha） | **✅ 2026-10-20**（MRT/alpha/通道序实测通过，见 `work/M1_7_mrt_alpha.md`；GL 双验证待补） |
 | **M2.1** | 纹理采样（FS 读 texel） | 着色器输出纹理像素，readback 正确 | **✅ 2026-10-20**（2×2 RGBA8 四个 texel 各 10404 像素；根因是 bindless 降级 / STATE_TYPE / 宽高 / LOD 下限四处，见 `work/M2_1_texture.md`） |
 | **M2.2** | 多纹理单元 + 过滤模式 | 多单元各自独立、LINEAR 出现渐变 | **✅ 2026-10-20**（unit = binding 号；binding 0/2 留空 1 验证；见 `work/M2_2_multi_texture.md`） |
-| **M2.3** | mipmap 链 | 四级 LOD 整屏纯色与各级一致 | 门槛项，**下一步** |
-| **M2.4** | 多 descriptor set | 两 set 同 binding 0 各取各的纹理 | M2.3 |
+| **M2.3** | mipmap 链 | 四级 LOD 整屏纯色与各级一致 | **✅ 2026-10-20**（fdl5 布局 + `MIPLVLS`；见 `work/M2_3_mipmap.md`） |
+| **M2.4** | 多 descriptor set | 两 set 同 binding 0 各取各的纹理 | M2.3 ✅，**下一步** |
 | **M2.5** | 越界 wrap（REPEAT/MIRROR/BORDER） | 三种模式输出可区分直方图 | M2.2 |
 | **M3.1** | tiled 纹理 | linear/tiled 采样逐像素一致 | M2.x |
 | **M3.2** | GMEM / binning 路径 | 全部探针在 GMEM 下与 sysmem 逐像素一致 | M3.1 |

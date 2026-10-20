@@ -8,7 +8,7 @@
 | 目标 | 可行性 | 说明 |
 |---|---|---|
 | 自研 a5xx Vulkan 后端，跑通探针与简单图形程序 | **可行，已过半** | 核心链路（draw / varying / MRT / 纹理）全部真机验证 |
-| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，需 M2.3+M2.4** | 门槛项是 mipmap 与多 set |
+| 端点级真实应用（SDL/Vulkan 简单 3D、UI） | **可行，需 M2.4** | mipmap 已通（M2.3），剩多 set |
 | 替代 blob 跑真实 3D 游戏 | **不可行** | 需 tiled rendering + 大量 Vulkan 特性，工作量 10× 以上 |
 | 通过 VK-GL-CTS / dEQP | **不可行** | 上万用例，涉及 tiling/barrier/queries/compute/多队列 |
 
@@ -31,7 +31,7 @@
 - 实测：6/6 PASS（vktri_base / vk_alpha_half / vk_mrt2 / vk_tex / vk_tex2 / vk_tex2_linear）；
   `--mutate --case vk_tex` → `色块 RGB(255,255,255) 计数 10404 != 期望 10405`，退出码 1 ✔
 
-### M2.3 mipmap 链（2–3 天，门槛项）
+### M2.3 mipmap 链 ✅ 2026-10-20（门槛项）
 - 目标：`MIPLVLS > 0`、per-level 地址推导、`minLod/maxLod`/LOD bias、`VkImageView` 的 `baseMipLevel/levelCount`。
 - 前置取证（**不得凭记忆**）：`a5xx/fd5_texture.c` 的 mip 地址公式与 `fd5_emit.c` 里 level 地址进状态块的方式。
   a5xx 的 TPL1 用固定公式按 level 递增基址（对比 a6xx 有 per-level 表），具体字段必须读源码补进
@@ -41,7 +41,16 @@
 - 风险/回退：若硬件 mip 布局语义取不到，退化为「只在 level 0 采样 + 明确文档化限制」，
   并在 `VkImageCreateInfo.mipLevels>1` 时给应用告警。
 
-### M2.4 多 descriptor set（1–2 天）
+### M2.3 结论摘要
+
+- a5xx 硬件按 **base 级描述符 + `MIPLVLS`** 自动逐级寻址，驱动不需要级表；`TILE_MODE` 用 `TILE5_LINEAR`。
+- 布局必须走 **`fdl5_layout()`**（`work/mesa-src/.../fdl/fd5_layout.c`），a6xx 的 `fdl6_layout` mip 偏移/aligned 规则不同。
+- `MIPLVLS = levelCount-1`；`view.base_addr` 已含 `fdl_surface_offset(baseMip,layer)`，再加 `view.offset` 是重复计数（已修）。
+- 采样器：`MIPFILTER_LINEAR_NEAR` 只在 `mipmapMode==LINEAR` 置位；`maxLod==0` 时仍压 `<=0.125`。
+- 顺带修正：**所有图像布局从 a6xx TILE6_3 改为 a5xx linear**，旧六探针仍逐像素通过（此前是小尺寸巧合）。
+- 详见 `work/M2_3_mipmap.md`；回归 `vk_mip` 已入期望表（7/7）。
+
+### M2.4 多 descriptor set（1–2 天）**← 下一步**
 - 目标：两个 set 都用 binding 0 时不再撞号。
 - 主方案（不依赖 layout 前缀和）：`unit = set * TU5XX_UNITS_PER_SET + binding`，
   `TU5XX_UNITS_PER_SET = 8`，总单元上限 16（`TPL1_FS_TEX_COUNT` 的小整数要求）。
@@ -95,7 +104,7 @@
 | 顺序 | 项 | 估时 | 交付判据 |
 |---|---|---|---|
 | 1 | M2.0 回归套件 | 0.5 天 | 回退一处能被脚本抓到 |
-| 2 | M2.3 mipmap | 2–3 天 | 四级 LOD 整屏纯色正确 |
+| 2 | M2.3 mipmap ✅ | 实际 0.5 天 | 四级 LOD 各象限一色 10404 像素；`MIPLVLS=0` 伪证全落回 L0 |
 | 3 | M2.4 多 set | 1–2 天 | 两 set 同 binding 0 各取各的纹理 |
 | 4 | M2.5 越界 wrap | 0.5–1 天 | 三套可区分直方图 |
 | 5 | M3.1 tiled 纹理 | 3–5 天 | linear/tiled 采样一致性 |

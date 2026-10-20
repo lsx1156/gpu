@@ -1109,7 +1109,10 @@ tu5xx_write_tex_descriptor(uint32_t *dst, const VkDescriptorImageInfo *image_inf
    const enum pipe_format pformat = iview->view.format;
    const struct tu_native_format fmt = tu5_format_color(pformat);
    const uint32_t cpp = util_format_get_blocksize(pformat);
-   const uint64_t addr = iview->view.base_addr + iview->view.offset;
+   /* view.base_addr = iova + fdl_surface_offset(baseMip, baseLayer)（fd6_view.c:203-204），
+    * 已经包含 level 偏移；再加 view.offset 会重复计数。 */
+   const uint64_t addr = iview->view.base_addr;
+   const uint32_t mip_levels = iview->vk.level_count > 0 ? iview->vk.level_count - 1 : 0;
 
    /* dword0：TILE_MODE(linear) | FMT | SRGB | SWIZ(X,Y,Z,W 恒等) | MIPLVLS(0=1 级) */
    dst[0] = A5XX_TEX_CONST_0_FMT((enum a5xx_tex_fmt) fmt.fmt) |
@@ -1118,7 +1121,8 @@ tu5xx_write_tex_descriptor(uint32_t *dst, const VkDescriptorImageInfo *image_inf
             A5XX_TEX_CONST_0_SWIZ_X(A5XX_TEX_X) |
             A5XX_TEX_CONST_0_SWIZ_Y(A5XX_TEX_Y) |
             A5XX_TEX_CONST_0_SWIZ_Z(A5XX_TEX_Z) |
-            A5XX_TEX_CONST_0_SWIZ_W(A5XX_TEX_W);
+            A5XX_TEX_CONST_0_SWIZ_W(A5XX_TEX_W) |
+            A5XX_TEX_CONST_0_MIPLVLS(mip_levels);   /* 硬件语义：除 base 外还有几级 */
    /* dword1：W/H 写像素数本身（fd5_texture.c:189-190，不是 size-1） */
    dst[1] = A5XX_TEX_CONST_1_WIDTH(iview->view.width) |
             A5XX_TEX_CONST_1_HEIGHT(iview->view.height);
@@ -1157,15 +1161,26 @@ tu5xx_write_sampler_descriptor(uint32_t *dst, const struct tu_sampler *sampler)
    const enum a5xx_tex_filter min =
       i->minFilter == VK_FILTER_LINEAR ? A5XX_TEX_LINEAR : A5XX_TEX_NEAREST;
 
-   dst[0] = A5XX_TEX_SAMP_0_XY_MAG(mag) |
+   /* mipmapMode=LINEAR 才开 MIPFILTER_LINEAR_NEAR（fd5_texture.c:90-96） */
+   const bool miplinear = i->mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+   dst[0] = COND(miplinear, A5XX_TEX_SAMP_0_MIPFILTER_LINEAR_NEAR) |
+            A5XX_TEX_SAMP_0_XY_MAG(mag) |
             A5XX_TEX_SAMP_0_XY_MIN(min) |
+            A5XX_TEX_SAMP_0_LOD_BIAS(i->mipLodBias) |
             A5XX_TEX_SAMP_0_WRAP_S((enum a5xx_tex_clamp) tu5xx_tex_wrap(i->addressModeU)) |
             A5XX_TEX_SAMP_0_WRAP_T((enum a5xx_tex_clamp) tu5xx_tex_wrap(i->addressModeV)) |
             A5XX_TEX_SAMP_0_WRAP_R((enum a5xx_tex_clamp) tu5xx_tex_wrap(i->addressModeW));
-   /* fd5_texture.c:112-118：单 mip 时 MIN/MAX_LOD 不能被 clamp 到 0，
-    * 否则 level0 的 min/mag 选择退化、采样返回 0。下限 0.125。 */
-   float max_lod = i->maxLod > 0.125f ? i->maxLod : 0.125f;
-   float min_lod = i->minLod > 0.125f ? i->minLod : 0.125f;
+   /* fd5_texture.c:109-118：有 mip 链时用真实 MIN/MAX_LOD；没有（maxLod==0）时
+    * 必须把两者都压到 <=0.125，否则 level0 的 min/mag 选择退化、采样返回 0。 */
+   float min_lod, max_lod;
+   if (i->maxLod > 0.0f) {
+      min_lod = i->minLod;
+      max_lod = i->maxLod;
+   } else {
+      min_lod = MIN2(i->minLod, 0.125f);
+      max_lod = MIN2(i->maxLod, 0.125f);
+   }
    dst[1] = A5XX_TEX_SAMP_1_MIN_LOD(min_lod) |
             A5XX_TEX_SAMP_1_MAX_LOD(max_lod);
    dst[2] = 0;
